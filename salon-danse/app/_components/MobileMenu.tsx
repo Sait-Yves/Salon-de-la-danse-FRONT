@@ -7,27 +7,10 @@ import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./nav-items";
 import { fetchCurrentUser } from "../services/auth";
 
-export default function MobileMenu() {
+export default function MobileMenu({ isLoggedIn, isAdmin }: { isLoggedIn: boolean, isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadRole() {
-      const user = await fetchCurrentUser();
-      if (!cancelled) {
-        setIsAdmin(user?.role === "admin");
-      }
-    }
-
-    loadRole();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const close = () => setOpen(false);
 
@@ -73,7 +56,11 @@ export default function MobileMenu() {
           {/* Panneau */}
           <nav className="absolute left-0 right-0 top-full z-50 border-t border-white/10 bg-[#3E150F]/98 backdrop-blur-xl px-5 py-4 shadow-2xl animate-fade-up">
             <ul className="flex flex-col">
-              {NAV_ITEMS.filter((item) => !item.admin || isAdmin).map(
+              {NAV_ITEMS.filter((item) => {
+                if (item.admin && !isAdmin) return false;
+                if (item.protected && !isLoggedIn) return false;
+                return true;
+              }).map(
                 (item) => {
                   const isActive =
                     item.href === "/"

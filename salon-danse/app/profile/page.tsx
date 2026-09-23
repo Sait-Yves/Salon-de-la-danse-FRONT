@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { fetchCurrentUser, type CurrentUser } from "../services/auth";
 import { fetchUserReservations } from "../services/planning";
 import { formatDay, type CreneauData } from "../services/planning-constants";
@@ -45,8 +46,23 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <main className="surface-grain min-h-[calc(100vh-5rem)] p-8 text-center">
-        <p>Veuillez vous connecter pour afficher votre badge.</p>
+      <main className="surface-grain min-h-[calc(100vh-5rem)] flex items-center justify-center p-5 md:p-8">
+        <div className="animate-fade-up w-full max-w-lg rounded-3xl border border-[#7A291E]/10 bg-white p-8 text-center shadow-[0_10px_40px_-12px_rgba(62,21,15,0.25)] md:p-12">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#7A291E]/10 text-3xl">
+            🔒
+          </div>
+          <h1 className="mb-3 font-['Montserrat'] text-2xl font-extrabold text-[#333333]">
+            Accès protégé
+          </h1>
+          <p className="mb-8 text-sm leading-relaxed text-[#666666]">
+            Votre badge officiel et le récapitulatif de votre planning sont liés à votre compte bénévole. Veuillez vous connecter pour y accéder.
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+            <Link href="/login?mode=code" className="btn-pill btn-pill-primary">
+              Se connecter
+            </Link>
+          </div>
+        </div>
       </main>
     );
   }

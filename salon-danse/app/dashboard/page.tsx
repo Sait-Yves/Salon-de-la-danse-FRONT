@@ -13,7 +13,7 @@ export default function DashboardPage() {
           <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 font-['Montserrat'] text-[11px] font-bold uppercase tracking-wider">
             Espace bénévole
           </span>
-          <h1 className="mt-3 font-['Montserrat'] text-2xl font-extrabold md:text-3xl">
+          <h1 className="mt-3 font-['Montserrat'] text-2xl font-extrabold text-white drop-shadow-md md:text-3xl">
             Bienvenue dans votre espace bénévole 👋
           </h1>
           <p className="mt-1 text-sm text-white/75">

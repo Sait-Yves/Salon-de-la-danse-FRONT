@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import NavBar from "./_components/NavBar";
+import MobileMenu from "./_components/MobileMenu";
+import { fetchCurrentUser } from "./services/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,11 +11,14 @@ export const metadata: Metadata = {
   description: "Plateforme officielle de gestion des bénévoles - JayDance Fam",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const user = await fetchCurrentUser();
+  const isLoggedIn = !!user;
+  const isAdmin = user?.role === "admin";
   return (
     <html lang="fr">
       <body className="min-h-screen flex flex-col bg-white text-[#666666] antialiased">
@@ -36,7 +41,10 @@ export default function RootLayout({
             </Link>
 
             {/* Navigation principale (desktop) */}
-            <NavBar />
+            <NavBar isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
+            
+            {/* Menu mobile (hamburger) */}
+            <MobileMenu isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
           </div>
         </header>
 

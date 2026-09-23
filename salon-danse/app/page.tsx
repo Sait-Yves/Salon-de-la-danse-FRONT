@@ -24,14 +24,8 @@ export default function Home() {
         </p>
 
         <div className="flex w-full flex-col justify-center gap-4 pt-2 sm:flex-row">
-          <Link href="/login" className="btn-pill btn-pill-inverse text-base">
+          <Link href="/login?mode=code" className="btn-pill btn-pill-inverse text-base">
             J&apos;ai mon code d&apos;invitation &rarr;
-          </Link>
-          <Link
-            href="/dashboard"
-            className="btn-pill btn-pill-primary text-base border border-white/25"
-          >
-            Aperçu Dashboard / Planning
           </Link>
         </div>
       </main>

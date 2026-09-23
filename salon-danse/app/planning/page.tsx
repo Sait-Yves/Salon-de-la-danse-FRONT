@@ -22,6 +22,7 @@ export default function PlanningPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activeDay, setActiveDay] = useState(EVENT_DAYS[0].value);
+  const [loadingCreneauId, setLoadingCreneauId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -60,8 +61,9 @@ export default function PlanningPage() {
     });
 
   const handleSelectCreneau = async (creneau: CreneauData) => {
-    if (isLocked || creneau.places_restantes === 0) return;
+    if (isLocked || creneau.places_restantes === 0 || loadingCreneauId === creneau.id) return;
     setErrorMessage("");
+    setLoadingCreneauId(creneau.id);
 
     const alreadySelected = selectedCreneaux.some(
       (item) => item.id === creneau.id,
@@ -76,11 +78,13 @@ export default function PlanningPage() {
       } else {
         setErrorMessage("Erreur lors de l'annulation de la réservation.");
       }
+      setLoadingCreneauId(null);
       return;
     }
 
     if (selectedCreneaux.length >= 3) {
       setErrorMessage("Volume horaire maximum atteint (3 créneaux / 6h).");
+      setLoadingCreneauId(null);
       return;
     }
 
@@ -92,6 +96,7 @@ export default function PlanningPage() {
       )
     ) {
       setErrorMessage("Vous avez déjà une mission sur cette tranche horaire.");
+      setLoadingCreneauId(null);
       return;
     }
 
@@ -100,6 +105,7 @@ export default function PlanningPage() {
       setErrorMessage(
         "Trois créneaux consécutifs sont interdits : une pause est obligatoire.",
       );
+      setLoadingCreneauId(null);
       return;
     }
 
@@ -112,6 +118,7 @@ export default function PlanningPage() {
       const freshCreneaux = await fetchCreneaux();
       setAllCreneaux(freshCreneaux);
     }
+    setLoadingCreneauId(null);
   };
 
   const handleValidatePlanning = async () => {
@@ -193,7 +200,7 @@ export default function PlanningPage() {
             key={day.value}
             type="button"
             onClick={() => setActiveDay(day.value)}
-            className={`btn-pill whitespace-nowrap text-sm ${activeDay === day.value ? "btn-pill-primary" : "btn-pill-ghost"}`}
+            className={`btn-pill shrink-0 whitespace-nowrap text-sm ${activeDay === day.value ? "btn-pill-primary" : "btn-pill-ghost"}`}
           >
             {day.label}
           </button>
@@ -215,7 +222,7 @@ export default function PlanningPage() {
             <button
               key={creneau.id}
               type="button"
-              disabled={isFull || isLocked}
+              disabled={isFull || isLocked || loadingCreneauId === creneau.id}
               aria-pressed={isSelected}
               onClick={() => handleSelectCreneau(creneau)}
               className={`createur-card group relative text-left p-6 flex flex-col justify-between gap-4 disabled:cursor-not-allowed disabled:opacity-55 ${isSelected ? "is-selected" : "hover:-translate-y-1 hover:shadow-xl hover:border-[#7A291E]/30"}`}
@@ -249,13 +256,15 @@ export default function PlanningPage() {
                 <span
                   className={`text-sm font-bold ${isSelected ? "text-[#7A291E]" : "text-[#999]"}`}
                 >
-                  {isSelected
-                    ? "Sélectionné"
-                    : isFull
-                      ? "Indisponible"
-                      : isLocked
-                        ? "Verrouillé"
-                        : "Sélectionner"}
+                  {loadingCreneauId === creneau.id
+                    ? "Chargement..."
+                    : isSelected
+                      ? "Sélectionné"
+                      : isFull
+                        ? "Indisponible"
+                        : isLocked
+                          ? "Verrouillé"
+                          : "Sélectionner"}
                 </span>
               </div>
             </button>

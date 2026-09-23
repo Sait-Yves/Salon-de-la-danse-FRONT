@@ -17,8 +17,8 @@ export interface CurrentUser {
 }
 
 export async function loginAction(formData: FormData) {
-  const email = formData.get("email");
-  const password = formData.get("password");
+  const email = (formData.get("email") as string)?.trim();
+  const password = (formData.get("password") as string)?.trim();
 
   if (!email || !password) {
     return { error: "Veuillez renseigner tous les champs." };
@@ -32,7 +32,10 @@ export async function loginAction(formData: FormData) {
   let json;
   try {
     json = await response.json();
-  } catch {
+    console.log("Login API Response status:", response.status);
+    console.log("Login API Response body:", JSON.stringify(json).substring(0, 200));
+  } catch (e) {
+    console.error("Failed to parse login response:", e);
     return { error: "Erreur serveur." };
   }
 
@@ -48,6 +51,8 @@ export async function loginAction(formData: FormData) {
         maxAge: 60 * 60 * 24 * 7, // 7 jours
       });
       return { success: true };
+    } else {
+      console.error("No token found in response even though status is OK.");
     }
   }
 

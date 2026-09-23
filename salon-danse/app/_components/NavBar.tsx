@@ -4,18 +4,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NAV_ITEMS } from "./nav-items";
-import { getCurrentUser } from "../services/auth";
+import { fetchCurrentUser } from "../services/auth";
 
 export default function NavBar() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setIsAdmin(getCurrentUser()?.role === "admin");
-    });
+    let cancelled = false;
 
-    return () => window.cancelAnimationFrame(frame);
+    async function loadRole() {
+      const user = await fetchCurrentUser();
+      if (!cancelled) {
+        setIsAdmin(user?.role === "admin");
+      }
+    }
+
+    loadRole();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

@@ -24,19 +24,28 @@ export async function loginAction(formData: FormData) {
     return { error: "Veuillez renseigner tous les champs." };
   }
 
-  const response = await fetchAPI("/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  let response;
+  try {
+    response = await fetchAPI("/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (e: any) {
+    return { error: `[DEBUG] Fetch Exception: ${e.message}` };
+  }
+
+  let rawText = "";
+  try {
+    rawText = await response.text();
+  } catch (e: any) {
+    return { error: `[DEBUG] Impossible de lire la réponse texte: ${e.message}` };
+  }
 
   let json;
   try {
-    json = await response.json();
-    console.log("Login API Response status:", response.status);
-    console.log("Login API Response body:", JSON.stringify(json).substring(0, 200));
-  } catch (e) {
-    console.error("Failed to parse login response:", e);
-    return { error: "Erreur serveur." };
+    json = JSON.parse(rawText);
+  } catch (e: any) {
+    return { error: `[DEBUG] JSON Parse Error (Status ${response.status}): ${rawText.substring(0, 100)}` };
   }
 
   if (response.ok) {
@@ -52,11 +61,11 @@ export async function loginAction(formData: FormData) {
       });
       return { success: true };
     } else {
-      console.error("No token found in response even though status is OK.");
+      return { error: `[DEBUG] Status 200 OK, mais token introuvable. Contenu: ${JSON.stringify(json)}` };
     }
   }
 
-  return { error: json.message || "Identifiants incorrects." };
+  return { error: `[DEBUG] Erreur API (Status ${response.status}): ${json.message || JSON.stringify(json)}` };
 }
 
 export async function registerAction(formData: FormData, invitationCode: string) {

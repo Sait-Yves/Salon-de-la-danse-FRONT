@@ -1,0 +1,286 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-heading: "Montserrat", Helvetica, Arial, sans-serif;
+  --font-body: "Open Sans", Arial, sans-serif;
+}
+
+:root {
+  /* --- Charte officielle (couleurs inchangées) --- */
+  --color-primary: #7A291E;
+  --color-primary-dark: #3E150F;
+  --color-primary-light: #9C4437;
+  --color-accent: #993300;
+  --color-white: #FFFFFF;
+  --color-heading: #333333;
+  --color-text: #666666;
+  --color-text-alt: #555353;
+  --color-surface: rgba(214, 214, 214, 0.45);
+
+  --gradient-primary: linear-gradient(135deg, #7A291E 0%, #3E150F 100%);
+  --overlay-photo: rgba(0, 0, 0, 0.45);
+
+  --font-heading: "Montserrat", Helvetica, Arial, sans-serif;
+  --font-body: "Open Sans", Arial, sans-serif;
+
+  --radius-pill: 999px;
+  --radius-card: 18px;
+  --radius-input: 12px;
+
+  /* --- Ombres modernes, teintées bordeaux --- */
+  --shadow-card: 0 1px 2px rgba(62, 21, 15, 0.04), 0 8px 24px rgba(62, 21, 15, 0.06);
+  --shadow-card-hover: 0 4px 12px rgba(62, 21, 15, 0.08), 0 16px 40px rgba(62, 21, 15, 0.12);
+  --shadow-glow: 0 8px 30px rgba(122, 41, 30, 0.35);
+
+  --ring-focus: 0 0 0 4px rgba(122, 41, 30, 0.15);
+  --container-max: 1080px;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text);
+  background: var(--color-white);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--color-heading);
+  letter-spacing: -0.015em;
+}
+/* Les titres posés sur un fond sombre (header, bandeaux, hero)
+   doivent rester blancs, quoi qu'en dise la règle générique ci-dessus. */
+header h1, header h2, header h3,
+.banner-gradient h1, .banner-gradient h2, .banner-gradient h3,
+.hero-bg h1, .hero-bg h2, .hero-bg h3 {
+  color: #ffffff;
+}
+
+/* =========================================================
+   BOUTONS PILULES OFFICIELS — modernisés
+   ========================================================= */
+.btn-pill {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  padding: 12px 28px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+.btn-pill:active {
+  transform: translateY(1px) scale(0.99);
+}
+.btn-pill:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+.btn-pill-primary {
+  background: var(--gradient-primary);
+  color: var(--color-white);
+  box-shadow: 0 4px 14px rgba(122, 41, 30, 0.3);
+}
+.btn-pill-primary:hover {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+}
+.btn-pill-inverse {
+  background: var(--color-white);
+  color: var(--color-primary);
+  box-shadow: 0 4px 14px rgba(62, 21, 15, 0.15);
+}
+.btn-pill-inverse:hover {
+  background: #faf6f5;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(62, 21, 15, 0.22);
+}
+.btn-pill-ghost {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: rgba(122, 41, 30, 0.25);
+}
+.btn-pill-ghost:hover {
+  background: rgba(122, 41, 30, 0.06);
+  border-color: var(--color-primary);
+}
+
+/* =========================================================
+   CARTES OFFICIELLES — modernisées
+   ========================================================= */
+.official-card {
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  background: var(--color-white);
+  border: 1px solid rgba(122, 41, 30, 0.08);
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+}
+.official-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: rgba(122, 41, 30, 0.2);
+}
+
+/* Carte de créneau (planning) — bouton cliquable */
+.createur-card {
+  border-radius: var(--radius-card);
+  background: var(--color-white);
+  border: 1px solid rgba(122, 41, 30, 0.1);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+.createur-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+.createur-card.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary), var(--shadow-card-hover);
+  background: linear-gradient(
+    135deg,
+    rgba(122, 41, 30, 0.07) 0%,
+    rgba(62, 21, 15, 0.02) 100%
+  );
+}
+
+/* Bandeau dégradé (en-têtes de section) */
+.banner-gradient {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #7a291e 0%, #3e150f 100%);
+  color: #fff;
+  box-shadow: 0 18px 40px -18px rgba(62, 21, 15, 0.65);
+}
+.banner-gradient::after {
+  content: "";
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 200px;
+  height: 200px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+/* =========================================================
+   CHAMPS DE FORMULAIRE
+   ========================================================= */
+.field {
+  width: 100%;
+  border-radius: var(--radius-input);
+  border: 1px solid rgba(122, 41, 30, 0.18);
+  background: #fdfcfc;
+  padding: 12px 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-heading);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.field::placeholder {
+  color: #a8a2a0;
+}
+.field:hover {
+  border-color: rgba(122, 41, 30, 0.35);
+}
+.field:focus {
+  outline: none;
+  background: var(--color-white);
+  border-color: var(--color-primary);
+  box-shadow: var(--ring-focus);
+}
+.field-label {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: 6px;
+}
+
+/* =========================================================
+   SURFACES DÉCORATIVES
+   ========================================================= */
+.surface-grain {
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(122, 41, 30, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(62, 21, 15, 0.05) 0%, transparent 45%);
+}
+
+/* Hero avec fond d'écran assombri */
+.hero-bg {
+  background: linear-gradient(var(--overlay-photo), var(--overlay-photo)), url('https://salondeladanse.fr/wp-content/uploads/2025/12/bg_fond_home-min.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+@media (max-width: 768px) {
+  .hero-bg {
+    background-attachment: scroll;
+  }
+}
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fade-in {
+  animation: fade-in 0.5s ease both;
+}
+.animate-rise {
+  animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.16s; }
+.delay-3 { animation-delay: 0.24s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-rise {
+    animation: none;
+  }
+  .btn-pill:hover,
+  .official-card-hover:hover {
+    transform: none;
+  }
+}
+
+/* Impression : masquer les éléments non pertinents */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+}

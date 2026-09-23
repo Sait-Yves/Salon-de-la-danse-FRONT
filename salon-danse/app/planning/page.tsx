@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   fetchCreneaux,
   fetchUserReservations,
@@ -9,14 +13,6 @@ import {
   formatDay,
   type CreneauData,
 } from "../services/planning-constants";
-  EVENT_DAYS,
-  formatDay,
-  fetchCreneaux,
-  fetchUserReservations,
-  toggleReservation,
-  validerPlanning,
-  type CreneauData,
-} from "../services/planning";
 
 export default function PlanningPage() {
   const router = useRouter();

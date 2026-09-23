@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import { fetchCurrentUser, type CurrentUser } from "../services/auth";
 import { fetchUserReservations } from "../services/planning";
 import { formatDay, type CreneauData } from "../services/planning-constants";
 
@@ -109,7 +112,7 @@ export default function ProfilePage() {
         </div>
         {planning.selected.length ? (
           <ul className="space-y-3">
-            {planning.selected.map((slot) => (
+            {planning.selected.map((slot: CreneauData) => (
               <li
                 key={slot.id}
                 className="flex justify-between items-center gap-3 rounded-2xl border border-[#7A291E]/8 bg-[#7A291E]/[0.03] p-4 text-sm"

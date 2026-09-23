@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./nav-items";
-import { getCurrentUser } from "../services/auth";
+import { fetchCurrentUser } from "../services/auth";
 
 export default function MobileMenu() {
   const [open, setOpen] = useState(false);
@@ -13,11 +13,20 @@ export default function MobileMenu() {
   const pathname = usePathname();
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setIsAdmin(getCurrentUser()?.role === "admin");
-    });
+    let cancelled = false;
 
-    return () => window.cancelAnimationFrame(frame);
+    async function loadRole() {
+      const user = await fetchCurrentUser();
+      if (!cancelled) {
+        setIsAdmin(user?.role === "admin");
+      }
+    }
+
+    loadRole();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const close = () => setOpen(false);

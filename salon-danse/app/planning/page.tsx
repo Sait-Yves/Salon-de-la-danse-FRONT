@@ -1,8 +1,14 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
+  fetchCreneaux,
+  fetchUserReservations,
+  toggleReservation,
+  validerPlanning,
+} from "../services/planning";
+import {
+  EVENT_DAYS,
+  formatDay,
+  type CreneauData,
+} from "../services/planning-constants";
   EVENT_DAYS,
   formatDay,
   fetchCreneaux,

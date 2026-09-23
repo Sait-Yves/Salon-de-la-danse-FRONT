@@ -6,7 +6,8 @@ import type { CurrentUser } from "./auth";
 export async function fetchUsers() {
   const res = await fetchAPI("/admin/users");
   if (res.ok) {
-    return res.json();
+    const json = await res.json();
+    return json.data || json;
   }
   return [];
 }

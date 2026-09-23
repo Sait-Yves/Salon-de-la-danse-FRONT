@@ -29,11 +29,18 @@ export async function loginAction(formData: FormData) {
     body: JSON.stringify({ email, password }),
   });
 
+  let json;
+  try {
+    json = await response.json();
+  } catch {
+    return { error: "Erreur serveur." };
+  }
+
   if (response.ok) {
-    const data = await response.json();
-    if (data.token) {
+    const token = json.data?.token || json.token;
+    if (token) {
       const cookieStore = await cookies();
-      cookieStore.set("auth_token", data.token, {
+      cookieStore.set("auth_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -44,7 +51,7 @@ export async function loginAction(formData: FormData) {
     }
   }
 
-  return { error: "Identifiants incorrects." };
+  return { error: json.message || "Identifiants incorrects." };
 }
 
 export async function registerAction(formData: FormData, invitationCode: string) {
@@ -72,11 +79,18 @@ export async function registerAction(formData: FormData, invitationCode: string)
     // fetchAPI removes it if it's FormData.
   });
 
+  let json;
+  try {
+    json = await response.json();
+  } catch {
+    return { error: "Erreur de connexion au serveur." };
+  }
+
   if (response.ok) {
-    const data = await response.json();
-    if (data.token) {
+    const token = json.data?.token || json.token;
+    if (token) {
       const cookieStore = await cookies();
-      cookieStore.set("auth_token", data.token, {
+      cookieStore.set("auth_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -88,8 +102,7 @@ export async function registerAction(formData: FormData, invitationCode: string)
     return { success: true, tokenRequired: false };
   }
   
-  const errorData = await response.json().catch(() => null);
-  return { error: errorData?.message || "Erreur lors de l'inscription. Veuillez vérifier le code d'invitation." };
+  return { error: json.message || "Erreur lors de l'inscription. Veuillez vérifier le code d'invitation." };
 }
 
 export async function logoutAction() {
@@ -101,8 +114,8 @@ export async function logoutAction() {
 export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   const response = await fetchAPI("/me", { method: "GET" });
   if (response.ok) {
-    const data = await response.json();
-    return data;
+    const json = await response.json();
+    return json.data || json;
   }
   return null;
 }

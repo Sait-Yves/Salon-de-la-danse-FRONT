@@ -27,20 +27,19 @@ export function formatDay(value: string) {
 export async function fetchCreneaux(): Promise<CreneauData[]> {
   const res = await fetchAPI("/creneaux");
   if (res.ok) {
-    return res.json();
+    const json = await res.json();
+    return json.data || json;
   }
   return [];
 }
 
 export async function fetchUserReservations(): Promise<{ selected: CreneauData[], locked: boolean }> {
-  // GET /planning fetches the user's planning state (locked or not) and reservations
-  // Since the API doc has GET /planning and GET /reservations, let's assume /planning gives the locked state.
-  // Actually, let's fetch /planning. If it fails, fallback to empty.
   const res = await fetchAPI("/planning");
   if (res.ok) {
-    const data = await res.json();
+    const json = await res.json();
+    const data = json.data || json;
     return {
-      selected: data.reservations || data.creneaux || [], // Adjust based on actual API payload
+      selected: data.reservations || data.creneaux || (Array.isArray(data) ? data : []),
       locked: data.statut === "valide" || data.locked === true
     };
   }

@@ -1,32 +1,28 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+"use server";
 
-export async function verifyInvitationCode(code: string) {
-  const response = await fetch(`${API_BASE_URL}/invitations/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+import { cookies } from "next/headers";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vps123924.serveur-vps.net/api';
+
+export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+
+  const headers = new Headers(options.headers);
+  headers.set('Accept', 'application/json');
+  
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
   });
-  return response.json();
-}
 
-export async function registerUser(userData: FormData) {
-  const response = await fetch(`${API_BASE_URL}/users/register`, {
-    method: 'POST',
-    body: userData,
-  });
-  return response.json();
-}
-
-export async function getCreneauxByEdition(editionId: number) {
-  const response = await fetch(`${API_BASE_URL}/editions/${editionId}/creneaux`);
-  return response.json();
-}
-
-export async function saveUserReservations(userId: number, creneauIds: number[]) {
-  const response = await fetch(`${API_BASE_URL}/reservations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId, creneau_ids: creneauIds }),
-  });
-  return response.json();
+  return response;
 }

@@ -2,37 +2,54 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { getCurrentUser } from "../services/auth";
+import { fetchCurrentUser, type CurrentUser } from "../services/auth";
 import {
   formatDay,
-  readPlanning,
-  readProfile,
+  fetchUserReservations,
   type CreneauData,
-  type VolunteerProfile,
 } from "../services/planning";
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<VolunteerProfile | null>(null);
+  const [profile, setProfile] = useState<CurrentUser | null>(null);
   const [planning, setPlanning] = useState<{
     selected: CreneauData[];
     locked: boolean;
   }>({ selected: [], locked: false });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setProfile(readProfile());
-      setPlanning(readPlanning());
-    });
-    return () => window.cancelAnimationFrame(frame);
+    async function loadProfileData() {
+      try {
+        setIsLoading(true);
+        const [userRes, planningRes] = await Promise.all([
+          fetchCurrentUser(),
+          fetchUserReservations(),
+        ]);
+        setProfile(userRes);
+        setPlanning(planningRes);
+      } catch (err) {
+        console.error("Failed to load profile", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadProfileData();
   }, []);
 
-  const currentUser = getCurrentUser();
   const handlePrint = () => window.print();
+
+  if (isLoading) {
+    return (
+      <main className="surface-grain min-h-[calc(100vh-5rem)] flex items-center justify-center text-center">
+        <p className="font-['Montserrat'] text-xl font-bold text-[#7A291E] animate-pulse">Chargement de votre profil...</p>
+      </main>
+    );
+  }
 
   if (!profile) {
     return (
       <main className="surface-grain min-h-[calc(100vh-5rem)] p-8 text-center">
-        <p>Complétez votre inscription pour afficher votre badge.</p>
+        <p>Veuillez vous connecter pour afficher votre badge.</p>
       </main>
     );
   }
@@ -59,34 +76,25 @@ export default function ProfilePage() {
       <div className="animate-fade-up official-card relative mx-auto max-w-sm overflow-hidden bg-white p-8 text-center shadow-2xl space-y-6">
         <div className="relative">
           <div className="inline-block rounded-full bg-gradient-to-br from-[#7A291E] to-[#3E150F] px-5 py-2 font-['Montserrat'] text-[11px] font-black uppercase tracking-[0.2em] text-white shadow-lg">
-            {currentUser?.role === "admin" ? "ADMINISTRATEUR" : "BÉNÉVOLE"}
+            {profile.role === "admin" ? "ADMINISTRATEUR" : "BÉNÉVOLE"}
           </div>
           <div className="relative mx-auto mt-6 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-[#7A291E]/15 bg-slate-100 shadow-inner">
-            {profile.photoDataUrl ? (
-              <Image
-                src={profile.photoDataUrl}
-                alt={`Photo de ${profile.prenom} ${profile.nom}`}
-                fill
-                unoptimized
-                className="object-cover"
-              />
-            ) : (
-              <span className="text-xs font-semibold text-[#555353]">
-                Photo
-              </span>
-            )}
+            {/* Si l'API renvoie l'URL de la photo dans le profil, utilisez-la ici. Sinon, fallback sur un placeholder text. */}
+            <span className="text-xs font-semibold text-[#555353]">
+              Photo non disponible
+            </span>
           </div>
           <h2 className="mt-5 font-['Montserrat'] text-2xl font-black text-[#333333]">
             {profile.prenom} {profile.nom}
           </h2>
           <p className="mt-1 inline-block rounded-lg bg-[#7A291E]/8 px-3 py-1 font-['Montserrat'] text-xs font-bold tracking-wide text-[#7A291E]">
-            ID : {profile.idUnique}
+            ID : BEN-{profile.id}
           </p>
           <div className="mx-auto mt-6 grid h-28 w-28 grid-cols-5 gap-1 rounded-2xl bg-white p-3 shadow-inner ring-1 ring-[#3E150F]/15">
             {Array.from({ length: 25 }, (_, index) => (
               <span
                 key={index}
-                className={`${(index * 7 + profile.idUnique.length) % 3 === 0 ? "bg-[#3E150F]" : "bg-white"}`}
+                className={`${(index * 7 + profile.id) % 3 === 0 ? "bg-[#3E150F]" : "bg-white"}`}
               />
             ))}
           </div>
@@ -117,7 +125,7 @@ export default function ProfilePage() {
                     {formatDay(slot.jour)}
                   </span>
                   <p className="mt-0.5 text-xs text-[#666666]">
-                    {slot.mission_nom}
+                    {slot.mission_nom || `Mission #${slot.mission_id}`}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-lg border border-[#7A291E]/15 bg-[#7A291E]/10 px-3 py-1 text-xs font-semibold text-[#7A291E]">

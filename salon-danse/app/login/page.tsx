@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  loginWithOneTimeCode,
-  loginWithPassword,
-  requestPasswordReset,
-  resetPassword,
-} from "../services/auth";
+import { loginAction } from "../services/auth";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"password" | "code" | "reset">("password");
@@ -16,42 +11,38 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setMessage("");
+    setIsLoading(true);
 
-    if (mode === "password" && loginWithPassword(email, password)) {
-      router.push("/dashboard");
-    } else if (mode === "code" && code.trim() === "DANSE2027-TEST") {
-      router.push("/register");
-    } else if (mode === "code" && loginWithOneTimeCode(code, email)) {
-      router.push("/dashboard");
-    } else if (mode === "reset") {
-      if (!code) {
-        const resetCode = requestPasswordReset(email);
-        setMessage(
-          resetCode
-            ? `Code de réinitialisation de démonstration : ${resetCode}`
-            : "Aucun compte ne correspond à cet e-mail.",
-        );
-      } else if (resetPassword(email, code, password)) {
-        setMessage(
-          "Mot de passe modifié. Vous pouvez maintenant vous connecter.",
-        );
-        setMode("password");
-        setCode("");
-      } else {
-        setError("Code de réinitialisation invalide ou déjà utilisé.");
+    try {
+      if (mode === "password") {
+        const formData = new FormData();
+        formData.append("email", email);
+        formData.append("password", password);
+        
+        const result = await loginAction(formData);
+        
+        if (result.success) {
+          router.push("/dashboard");
+        } else {
+          setError(result.error || "E-mail ou mot de passe incorrect.");
+        }
+      } else if (mode === "code") {
+        // Redirection vers l'inscription avec le code d'invitation
+        router.push(`/register?code=${encodeURIComponent(code)}`);
+      } else if (mode === "reset") {
+        setMessage("La réinitialisation n'est pas encore implémentée avec la nouvelle API.");
       }
-    } else {
-      setError(
-        mode === "password"
-          ? "E-mail ou mot de passe incorrect."
-          : "Code invalide, déjà utilisé ou associé à un autre e-mail.",
-      );
+    } catch (err) {
+      setError("Une erreur est survenue lors de la connexion.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -106,7 +97,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="field"
-                required
+                required={mode !== "code"} // Email not mandatory for just entering a code
               />
             </div>
           )}
@@ -136,14 +127,14 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="field"
-                required={mode === "password" || Boolean(code)}
+                required={mode === "password"}
               />
             </div>
           ) : null}
           {mode === "code" || mode === "reset" ? (
             <div>
               <label htmlFor="code" className="field-label">
-                {mode === "reset" ? "Code reçu" : "Code d&apos;accès"}
+                {mode === "reset" ? "Code reçu" : "Code d'invitation"}
               </label>
               <input
                 id="code"
@@ -168,12 +159,12 @@ export default function LoginPage() {
             </p>
           )}
 
-          <button type="submit" className="btn-pill btn-pill-primary w-full">
-            {mode === "password"
+          <button type="submit" disabled={isLoading} className="btn-pill btn-pill-primary w-full disabled:opacity-50">
+            {isLoading ? "Chargement..." : mode === "password"
               ? "Se connecter"
               : mode === "reset"
                 ? "Réinitialiser le mot de passe"
-                : "Valider le code"}
+                : "S'inscrire avec le code"}
           </button>
         </form>
         {mode === "password" && (
@@ -187,8 +178,7 @@ export default function LoginPage() {
         )}
         {mode === "code" && (
           <p className="mt-4 text-center text-xs text-[#666666]">
-            Le code bénévole de première inscription est accepté ici. Les codes
-            admin sont à usage unique.
+            Saisissez votre code d'invitation reçu par e-mail pour accéder au formulaire d'inscription.
           </p>
         )}
       </div>

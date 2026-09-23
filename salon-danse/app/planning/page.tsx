@@ -5,31 +5,40 @@ import { useRouter } from "next/navigation";
 import {
   EVENT_DAYS,
   formatDay,
-  MOCK_CRENEAUX,
-  readPlanning,
-  savePlanning,
+  fetchCreneaux,
+  fetchUserReservations,
+  toggleReservation,
+  validerPlanning,
   type CreneauData,
 } from "../services/planning";
 
 export default function PlanningPage() {
   const router = useRouter();
+  const [allCreneaux, setAllCreneaux] = useState<CreneauData[]>([]);
   const [selectedCreneaux, setSelectedCreneaux] = useState<CreneauData[]>([]);
   const [isLocked, setIsLocked] = useState(false);
-  const [adminLocked, setAdminLocked] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [activeDay, setActiveDay] = useState(EVENT_DAYS[0].value);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const stored = readPlanning();
-      setSelectedCreneaux(stored.selected);
-      setIsLocked(stored.locked);
-      setAdminLocked(
-        window.localStorage.getItem("salon-danse-admin-planning-locked") ===
-          "true",
-      );
-    });
-    return () => window.cancelAnimationFrame(frame);
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        const [creneauxRes, reservationsRes] = await Promise.all([
+          fetchCreneaux(),
+          fetchUserReservations(),
+        ]);
+        setAllCreneaux(creneauxRes);
+        setSelectedCreneaux(reservationsRes.selected);
+        setIsLocked(reservationsRes.locked);
+      } catch (err) {
+        setErrorMessage("Erreur lors du chargement des données.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
   }, []);
 
   const hasThreeConsecutive = (selection: CreneauData[]) =>
@@ -48,22 +57,31 @@ export default function PlanningPage() {
       );
     });
 
-  const handleSelectCreneau = (creneau: CreneauData) => {
-    if (isLocked || adminLocked || creneau.places_restantes === 0) return;
+  const handleSelectCreneau = async (creneau: CreneauData) => {
+    if (isLocked || creneau.places_restantes === 0) return;
     setErrorMessage("");
+
     const alreadySelected = selectedCreneaux.some(
       (item) => item.id === creneau.id,
     );
+
     if (alreadySelected) {
-      const next = selectedCreneaux.filter((item) => item.id !== creneau.id);
-      setSelectedCreneaux(next);
-      savePlanning(next, false);
+      // Find the specific reservation if the API returned it with a specific ID, otherwise we use creneau.id
+      const reservation = selectedCreneaux.find(item => item.id === creneau.id);
+      const success = await toggleReservation(creneau.id, false, reservation?.id);
+      if (success) {
+        setSelectedCreneaux((prev) => prev.filter((item) => item.id !== creneau.id));
+      } else {
+        setErrorMessage("Erreur lors de l'annulation de la réservation.");
+      }
       return;
     }
+
     if (selectedCreneaux.length >= 3) {
       setErrorMessage("Volume horaire maximum atteint (3 créneaux / 6h).");
       return;
     }
+
     if (
       selectedCreneaux.some(
         (item) =>
@@ -74,6 +92,7 @@ export default function PlanningPage() {
       setErrorMessage("Vous avez déjà une mission sur cette tranche horaire.");
       return;
     }
+
     const next = [...selectedCreneaux, creneau];
     if (hasThreeConsecutive(next)) {
       setErrorMessage(
@@ -81,11 +100,19 @@ export default function PlanningPage() {
       );
       return;
     }
-    setSelectedCreneaux(next);
-    savePlanning(next, false);
+
+    const success = await toggleReservation(creneau.id, true);
+    if (success) {
+      setSelectedCreneaux(next);
+    } else {
+      setErrorMessage("Impossible de réserver ce créneau. Il est peut-être complet.");
+      // Reload slots to get fresh capacity
+      const freshCreneaux = await fetchCreneaux();
+      setAllCreneaux(freshCreneaux);
+    }
   };
 
-  const handleValidatePlanning = () => {
+  const handleValidatePlanning = async () => {
     if (selectedCreneaux.length < 1) {
       setErrorMessage("Veuillez sélectionner au moins 1 créneau.");
       return;
@@ -95,13 +122,25 @@ export default function PlanningPage() {
         "Après validation, votre planning sera verrouillé. Confirmer ?",
       )
     ) {
-      setIsLocked(true);
-      savePlanning(selectedCreneaux, true);
-      router.push("/profile");
+      const success = await validerPlanning();
+      if (success) {
+        setIsLocked(true);
+        router.push("/profile");
+      } else {
+        setErrorMessage("Erreur lors de la validation du planning.");
+      }
     }
   };
 
-  const visibleCreneaux = MOCK_CRENEAUX.filter(
+  if (isLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="font-['Montserrat'] text-xl font-bold text-[#7A291E] animate-pulse">Chargement de votre planning...</p>
+      </main>
+    );
+  }
+
+  const visibleCreneaux = allCreneaux.filter(
     (item) => item.jour === activeDay,
   );
 
@@ -140,9 +179,9 @@ export default function PlanningPage() {
         </div>
       )}
 
-      {adminLocked && (
+      {isLocked && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Le planning est actuellement verrouillé par l&apos;administration.
+          Votre planning est verrouillé. Vous ne pouvez plus le modifier.
         </div>
       )}
 
@@ -174,7 +213,7 @@ export default function PlanningPage() {
             <button
               key={creneau.id}
               type="button"
-              disabled={isFull || isLocked || adminLocked}
+              disabled={isFull || isLocked}
               aria-pressed={isSelected}
               onClick={() => handleSelectCreneau(creneau)}
               className={`createur-card group relative text-left p-6 flex flex-col justify-between gap-4 disabled:cursor-not-allowed disabled:opacity-55 ${isSelected ? "is-selected" : "hover:-translate-y-1 hover:shadow-xl hover:border-[#7A291E]/30"}`}
@@ -190,7 +229,7 @@ export default function PlanningPage() {
                     {formatDay(creneau.jour)}
                   </span>
                   <h3 className="font-['Montserrat'] text-[17px] font-bold text-[#333333] mt-1">
-                    {creneau.mission_nom}
+                    {creneau.mission_nom || `Mission #${creneau.mission_id}`}
                   </h3>
                 </div>
                 <span
@@ -212,7 +251,7 @@ export default function PlanningPage() {
                     ? "Sélectionné"
                     : isFull
                       ? "Indisponible"
-                      : isLocked || adminLocked
+                      : isLocked
                         ? "Verrouillé"
                         : "Sélectionner"}
                 </span>
@@ -222,7 +261,7 @@ export default function PlanningPage() {
         })}
       </div>
 
-      {!isLocked && !adminLocked && (
+      {!isLocked && (
         <div className="fixed bottom-0 left-0 right-0 bg-white/85 backdrop-blur-xl border-t border-[#7A291E]/10 p-4 shadow-[0_-10px_30px_rgba(62,21,15,0.12)] flex justify-center z-40">
           <button
             onClick={handleValidatePlanning}

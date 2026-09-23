@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { fetchCurrentUser, type CurrentUser } from "../services/auth";
-import {
-  formatDay,
-  fetchUserReservations,
-  type CreneauData,
-} from "../services/planning";
+import { fetchUserReservations } from "../services/planning";
+import { formatDay, type CreneauData } from "../services/planning-constants";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<CurrentUser | null>(null);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAccount } from "../services/auth";
+import { saveProfile } from "../services/planning";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,7 +19,26 @@ export default function RegisterPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createAccount(formData.email, formData.password);
-    router.push("/dashboard");
+    const persistProfile = (photoDataUrl?: string) => {
+      saveProfile({
+        nom: formData.nom,
+        prenom: formData.prenom,
+        email: formData.email.trim().toLowerCase(),
+        telephone: formData.telephone,
+        photoDataUrl,
+        idUnique: `BEN-2027-${Math.floor(1000 + Math.random() * 9000)}`,
+      });
+      router.push("/dashboard");
+    };
+
+    if (formData.photo) {
+      const reader = new FileReader();
+      reader.onload = () => persistProfile(String(reader.result));
+      reader.readAsDataURL(formData.photo);
+      return;
+    }
+
+    persistProfile();
   };
 
   return (

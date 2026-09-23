@@ -1,5 +1,6 @@
 "use client";
 
+"use client";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -33,23 +34,39 @@ export default function DashboardPage() {
         </div>
         <ul className="space-y-3 text-sm text-[#555353]">
           <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">1</span>
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">
+              1
+            </span>
             <span>
-              Volume horaire requis : Entre <strong className="text-[#333333]">1 et 3 créneaux</strong> sur
+              Volume horaire requis : Entre{" "}
+              <strong className="text-[#333333]">1 et 3 créneaux</strong> sur
               tout le week-end (2h à 6h).
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">2</span>
-            <span>Interdiction d&apos;avoir 2 missions sur le même créneau horaire.</span>
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">
+              2
+            </span>
+            <span>
+              Interdiction d&apos;avoir 2 missions sur le même créneau horaire.
+            </span>
           </li>
           <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">3</span>
-            <span>Pause obligatoire : Interdiction d&apos;enchaîner 3 créneaux consécutifs.</span>
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">
+              3
+            </span>
+            <span>
+              Pause obligatoire : Interdiction d&apos;enchaîner 3 créneaux
+              consécutifs.
+            </span>
           </li>
           <li className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">4</span>
-            <span>Une fois validé définitivement, le planning est verrouillé.</span>
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7A291E]/10 text-[11px] font-bold text-[#7A291E]">
+              4
+            </span>
+            <span>
+              Une fois validé définitivement, le planning est verrouillé.
+            </span>
           </li>
         </ul>
       </div>

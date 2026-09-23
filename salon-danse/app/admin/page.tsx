@@ -24,6 +24,12 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "Tous" | "Validé" | "En attente"
+  >("Tous");
+  const [planningLocked, setPlanningLocked] = useState(false);
+  const [registrationStart, setRegistrationStart] = useState("2027-01-01");
+  const [registrationEnd, setRegistrationEnd] = useState("2027-05-10");
   const [codeEmail, setCodeEmail] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
@@ -38,6 +44,18 @@ export default function AdminDashboardPage() {
       }
 
       setAdminEmails(getAdminEmailList());
+      setPlanningLocked(
+        window.localStorage.getItem("salon-danse-admin-planning-locked") ===
+          "true",
+      );
+      setRegistrationStart(
+        window.localStorage.getItem("salon-danse-registration-start") ||
+          "2027-01-01",
+      );
+      setRegistrationEnd(
+        window.localStorage.getItem("salon-danse-registration-end") ||
+          "2027-05-10",
+      );
       setAuthorized(true);
     });
 
@@ -76,9 +94,11 @@ export default function AdminDashboardPage() {
 
   const filteredBenevoles = benevoles.filter(
     (b) =>
-      b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.mission.toLowerCase().includes(searchTerm.toLowerCase()),
+      (b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.mission.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (statusFilter === "Tous" || b.statut === statusFilter),
   );
 
   const toggleStatut = (id: number) => {
@@ -89,6 +109,64 @@ export default function AdminDashboardPage() {
           : b,
       ),
     );
+  };
+
+  const toggleMission = (id: number) => {
+    setBenevoles(
+      benevoles.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              mission: b.isSensible
+                ? "Accueil exposants"
+                : "Billetterie (Sensible)",
+              isSensible: !b.isSensible,
+            }
+          : b,
+      ),
+    );
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      ["Nom", "Prénom", "E-mail", "Mission", "Statut"],
+      ...filteredBenevoles.map((b) => [
+        b.nom,
+        b.prenom,
+        b.email,
+        b.mission,
+        b.statut,
+      ]),
+    ];
+    const csv = rows
+      .map((row) =>
+        row.map((value) => `"${value.replaceAll('"', '""')}"`).join(","),
+      )
+      .join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(
+      new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
+    );
+    link.download = "benevoles-salon-danse.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const savePlanningSettings = (event: React.FormEvent) => {
+    event.preventDefault();
+    window.localStorage.setItem(
+      "salon-danse-registration-start",
+      registrationStart,
+    );
+    window.localStorage.setItem(
+      "salon-danse-registration-end",
+      registrationEnd,
+    );
+    window.localStorage.setItem(
+      "salon-danse-admin-planning-locked",
+      String(planningLocked),
+    );
+    setAdminMessage("Les réglages du planning ont été enregistrés.");
   };
 
   const handleGenerateCode = (event: React.FormEvent) => {
@@ -125,7 +203,10 @@ export default function AdminDashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-pill btn-pill-inverse text-xs !py-2.5 !px-4">
+          <button
+            onClick={exportCsv}
+            className="btn-pill btn-pill-inverse text-xs !py-2.5 !px-4"
+          >
             Export Excel / CSV
           </button>
           <button className="btn-pill btn-pill-inverse text-xs !py-2.5 !px-4">
@@ -138,25 +219,29 @@ export default function AdminDashboardPage() {
         {[
           {
             label: "Total Bénévoles",
-            value: "130",
+            value: String(benevoles.length),
             color: "text-white",
             icon: "👥",
           },
           {
             label: "Plannings Validés",
-            value: "98",
+            value: String(
+              benevoles.filter((b) => b.statut === "Validé").length,
+            ),
             color: "text-emerald-600",
             icon: "✅",
           },
           {
             label: "En attente / Brouillon",
-            value: "32",
+            value: String(
+              benevoles.filter((b) => b.statut === "En attente").length,
+            ),
             color: "text-amber-600",
             icon: "⏳",
           },
           {
             label: "Taux de Remplissage",
-            value: "85%",
+            value: `${Math.round((benevoles.filter((b) => b.statut === "Validé").length / Math.max(benevoles.length, 1)) * 100)}%`,
             color: "text-[#7A291E]",
             icon: "📈",
           },
@@ -248,6 +333,49 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
+      <section className="official-card p-6">
+        <h2 className="font-['Montserrat'] text-lg font-bold text-[#333333]">
+          Pilotage de l&apos;inscription
+        </h2>
+        <p className="mt-1 text-sm text-[#666666]">
+          Ces réglages sont conservés localement pour la démonstration.
+        </p>
+        <form
+          onSubmit={savePlanningSettings}
+          className="mt-5 flex flex-wrap items-end gap-4"
+        >
+          <label className="text-xs font-semibold text-[#666666]">
+            Début
+            <input
+              type="date"
+              value={registrationStart}
+              onChange={(event) => setRegistrationStart(event.target.value)}
+              className="field mt-1"
+            />
+          </label>
+          <label className="text-xs font-semibold text-[#666666]">
+            Fin
+            <input
+              type="date"
+              value={registrationEnd}
+              onChange={(event) => setRegistrationEnd(event.target.value)}
+              className="field mt-1"
+            />
+          </label>
+          <label className="flex items-center gap-2 pb-3 text-sm font-semibold text-[#666666]">
+            <input
+              type="checkbox"
+              checked={planningLocked}
+              onChange={(event) => setPlanningLocked(event.target.checked)}
+            />{" "}
+            Verrouiller le planning
+          </label>
+          <button type="submit" className="btn-pill btn-pill-primary text-xs">
+            Enregistrer
+          </button>
+        </form>
+      </section>
+
       {adminMessage && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {adminMessage}
@@ -266,6 +394,17 @@ export default function AdminDashboardPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="field md:w-80"
           />
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as typeof statusFilter)
+            }
+            className="field md:w-36"
+          >
+            <option>Tous</option>
+            <option>Validé</option>
+            <option>En attente</option>
+          </select>
         </div>
 
         <div className="overflow-x-auto">
@@ -302,7 +441,10 @@ export default function AdminDashboardPage() {
                   </td>
                   <td className="py-4 px-4 text-right">
                     <button
-                      onClick={() => toggleStatut(b.id)}
+                      onClick={() => {
+                        toggleStatut(b.id);
+                        toggleMission(b.id);
+                      }}
                       className="btn-pill btn-pill-ghost text-xs !py-2 !px-3.5"
                     >
                       Modifier / Forcer

@@ -132,6 +132,16 @@ export async function adminRemoveReservationAction(reservationId: number): Promi
   return { ok: r.ok, message: r.ok ? undefined : r.message };
 }
 
+// Dernier créneau d'un planning validé : on déverrouille d'abord (le back refuse sinon),
+// puis on retire. Le planning repasse en brouillon et le bénévole devra le revalider.
+export async function adminUnlockAndRemoveAction(userId: number, reservationId: number): Promise<ActionResult> {
+  const unlock = await api(`/admin/users/${userId}/planning/deverrouiller`, { method: "POST" });
+  if (!unlock.ok) { refreshAdmin(); return { ok: false, message: unlock.message }; }
+  const r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
 export async function adminSetRoleAction(userId: number, role: "admin" | "benevole"): Promise<ActionResult> {
   const r = await api(`/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) });
   refreshAdmin();

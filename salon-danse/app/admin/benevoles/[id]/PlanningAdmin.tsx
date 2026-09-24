@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { adminAssignAction, adminRemoveReservationAction } from "../../../services/actions";
+import { adminAssignAction, adminRemoveReservationAction, adminUnlockAndRemoveAction } from "../../../services/actions";
 import { formatJour } from "../../../services/config";
 import type { Creneau, Reservation } from "../../../services/types";
 
@@ -9,11 +9,14 @@ export default function PlanningAdmin({ userId, reservations, creneaux, locked }
   const [pending, start] = useTransition();
   const [error, setError] = useState("");
   const [choice, setChoice] = useState("");
+  const [armed, setArmed] = useState<number | null>(null);
+  // Retirer le dernier créneau d'un planning validé = déverrouiller puis retirer (confirmation en 2 clics).
+  const lastLocked = locked && reservations.length === 1;
   const taken = new Set(reservations.map((r) => r.creneau.id));
   const options = creneaux.filter((c) => !taken.has(c.id));
 
   const run = (fn: () => Promise<{ ok: boolean; message?: string }>) =>
-    start(async () => { const r = await fn(); setError(r.ok ? "" : r.message ?? "Erreur"); if (r.ok) setChoice(""); });
+    start(async () => { const r = await fn(); setError(r.ok ? "" : r.message ?? "Erreur"); setArmed(null); if (r.ok) setChoice(""); });
 
   return (
     <div className="space-y-4">
@@ -26,7 +29,22 @@ export default function PlanningAdmin({ userId, reservations, creneaux, locked }
             return (
               <li key={r.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#7A291E]/10 p-3">
                 <span className="text-sm"><b className="font-['Montserrat']">{r.creneau.mission}</b>{r.creneau.sensible && <span className="ml-2 rounded-full bg-[#3E150F] px-2 py-0.5 text-[10px] text-white">Sensible</span>}<br />{f.long} · {r.creneau.debut}–{r.creneau.fin}</span>
-                <button type="button" disabled={pending} onClick={() => run(() => adminRemoveReservationAction(r.id))} className="btn-pill btn-pill-ghost text-xs !px-3 !py-1.5 disabled:opacity-60">Retirer</button>
+                <span className="flex flex-col items-end gap-1">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onBlur={() => setArmed(null)}
+                    onClick={() => {
+                      if (!lastLocked) return run(() => adminRemoveReservationAction(r.id));
+                      if (armed !== r.id) { setArmed(r.id); setError(""); return; }
+                      run(() => adminUnlockAndRemoveAction(userId, r.id));
+                    }}
+                    className="btn-pill btn-pill-ghost text-xs !px-3 !py-1.5 disabled:opacity-60"
+                  >
+                    {pending ? "…" : armed === r.id ? "Confirmer" : "Retirer"}
+                  </button>
+                  {armed === r.id && <span className="max-w-[16rem] text-right text-[11px] text-[#3E150F]/70">Le planning repassera en brouillon : le bénévole devra le revalider.</span>}
+                </span>
               </li>
             );
           })}

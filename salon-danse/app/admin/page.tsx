@@ -5,6 +5,7 @@ import Gauge from "../_components/Gauge";
 import StatusBadge from "../_components/StatusBadge";
 import ErrorCard from "../_components/ErrorCard";
 import StatusToggle from "./StatusToggle";
+import AutoRefresh from "../_components/AutoRefresh";
 
 type SP = { q?: string; statut?: string; mineur?: string; page?: string };
 
@@ -45,6 +46,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
   return (
     <>
+      <AutoRefresh seconds={30} />
       <div className="banner-gradient animate-rise">
         <h1 className="font-['Montserrat'] text-2xl font-black">Vue d&apos;ensemble</h1>
         <p className="text-sm text-white/75">Suivi des bénévoles et du remplissage des créneaux.</p>

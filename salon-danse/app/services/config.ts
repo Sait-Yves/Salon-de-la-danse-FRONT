@@ -18,6 +18,17 @@ export const SALON = {
   quotaMax: 3,
 };
 
+// Les 5 tranches horaires fixes du brief (2 h, sauf la première de 1 h 30), identiques chaque jour.
+export const PLAGES: { debut: string; fin: string }[] = [
+  { debut: "08:30", fin: "10:00" },
+  { debut: "10:00", fin: "12:00" },
+  { debut: "12:00", fin: "14:00" },
+  { debut: "14:00", fin: "16:00" },
+  { debut: "16:00", fin: "18:00" },
+];
+export const plageKey = (p: { debut: string; fin: string }) => `${p.debut}-${p.fin}`;
+export const plageLabel = (p: { debut: string; fin: string }) => `${p.debut.replace(":", "h")} – ${p.fin.replace(":", "h")}`;
+
 // Édition active (base de démo « Démonstration 2026 »). Il n'existe pas encore de route
 // GET /editions : on garde les bornes ici pour proposer les jours à la création d'un créneau.
 export const EDITION = { id: 1, debut: "2026-10-09", fin: "2026-10-11" };

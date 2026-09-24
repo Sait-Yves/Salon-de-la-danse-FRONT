@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { adminDeleteCreneauAction, adminDeleteMissionAction } from "../../services/actions";
 import { formatJour } from "../../services/config";
 import { PlacesPill } from "../../_components/Gauge";
@@ -28,7 +28,15 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
 }) {
   const [open, setOpen] = useState<Open>(null);
   const [jour, setJour] = useState("");
-  const close = () => setOpen(null);
+  const [flash, setFlash] = useState("");
+  const close = (message?: string) => { setOpen(null); if (message) setFlash(message); };
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(""), 6000);
+    return () => clearTimeout(t);
+  }, [flash]);
+  // Jours proposés à la création : ceux de l'édition (sinon ceux des créneaux existants).
+  const joursCreation = jours.length ? jours : [...new Set(creneaux.map((c) => c.jour))].sort();
 
   const byMission = useMemo(() => {
     const map = new Map<number, Creneau[]>();
@@ -66,7 +74,8 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
         <p className="official-card p-5 text-center text-sm">Aucune édition. Créez-en une avec « + Édition » pour ajouter des missions.</p>
       )}
 
-      {open?.kind === "newMission" && <MissionForm editionId={edition?.id} onDone={close} />}
+      {flash && <p role="status" className="animate-fade-in rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{flash}</p>}
+      {open?.kind === "newMission" && <MissionForm editionId={edition?.id} jours={joursCreation} onDone={close} />}
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer par jour">
         <button type="button" onClick={() => setJour("")} className={`btn-pill text-xs !px-4 !py-2 ${!jour ? "btn-pill-primary" : "btn-pill-ghost"}`}>Tous les jours</button>
@@ -111,7 +120,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
               </div>
 
               {open?.kind === "editMission" && open.id === m.id && <div className="mt-4"><MissionForm mission={m} onDone={close} /></div>}
-              {open?.kind === "newCreneau" && open.missionId === m.id && <div className="mt-4"><CreneauForm missionId={m.id} jours={allJours} onDone={close} /></div>}
+              {open?.kind === "newCreneau" && open.missionId === m.id && <div className="mt-4"><CreneauForm missionId={m.id} jours={joursCreation} onDone={close} /></div>}
 
               {list.length === 0 ? (
                 <p className="mt-4 rounded-xl bg-[#7A291E]/5 p-3 text-center text-sm text-[#3E150F]/70">{all.length ? "Aucun créneau ce jour-là." : "Pas encore de créneau."}</p>
@@ -137,7 +146,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
   );
 }
 
-function CreneauRow({ c, jours, missionId, editing, onEdit, onClose, readOnly }: { readOnly: boolean; c: Creneau; jours: string[]; missionId: number; editing: boolean; onEdit: () => void; onClose: () => void }) {
+function CreneauRow({ c, jours, missionId, editing, onEdit, onClose, readOnly }: { readOnly: boolean; c: Creneau; jours: string[]; missionId: number; editing: boolean; onEdit: () => void; onClose: (message?: string) => void }) {
   const n = occ(c);
   return (
     <>

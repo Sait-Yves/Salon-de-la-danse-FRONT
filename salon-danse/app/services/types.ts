@@ -43,6 +43,7 @@ export interface Edition {
   debut: string; // AAAA-MM-JJ
   fin: string;
   active: boolean;
+  archived: boolean;
 }
 
 export interface Mission {

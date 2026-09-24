@@ -43,7 +43,8 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
   const sorted = useMemo(() => [...missions].sort((a, b) => a.nom.localeCompare(b.nom)), [missions]);
   const allJours = useMemo(() => [...new Set([...jours, ...creneaux.map((c) => c.jour)])].sort(), [jours, creneaux]);
   // Sans édition, on ne peut pas créer de mission (le back exige edition_id).
-  const canCreate = editions == null || edition != null;
+  // Une édition archivée est en lecture seule.
+  const canCreate = editions == null || (edition != null && !edition.archived);
 
   const complets = creneaux.filter((c) => c.restantes === 0).length;
   const faibles = creneaux.filter((c) => c.restantes != null && c.capacite > 0 && occ(c) / c.capacite < 0.3).length;
@@ -61,7 +62,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
       </div>
 
       {editions && <EditionsBar editions={editions} current={edition} missionsCount={missions.length} />}
-      {editions && editions.length === 0 && (
+      {editions && editions.filter((e) => !e.archived).length === 0 && !edition && (
         <p className="official-card p-5 text-center text-sm">Aucune édition. Créez-en une avec « + Édition » pour ajouter des missions.</p>
       )}
 
@@ -97,7 +98,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
                   </h2>
                   <p className="text-xs text-[#3E150F]/70">{all.length} créneau{all.length > 1 ? "x" : ""} · {pris}/{cap} places prises</p>
                 </div>
-                <div className="flex flex-wrap items-start gap-2">
+                {canCreate && <div className="flex flex-wrap items-start gap-2">
                   <button type="button" onClick={() => setOpen({ kind: "newCreneau", missionId: m.id })} className="btn-pill btn-pill-primary text-xs !px-3 !py-1.5">+ Créneau</button>
                   <button type="button" onClick={() => setOpen({ kind: "editMission", id: m.id })} className="rounded-full border border-[#7A291E]/25 px-3 py-1 text-xs font-semibold text-[#7A291E] hover:border-[#7A291E]">Modifier</button>
                   <ConfirmButton
@@ -106,7 +107,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
                       ? Promise.resolve({ ok: false, message: `Supprimez d'abord ${all.length > 1 ? `ses ${all.length} créneaux` : "son créneau"}${inscrits > 0 ? ` (${inscrits} inscrit${inscrits > 1 ? "s" : ""} à retirer)` : ""}.` })
                       : adminDeleteMissionAction(m.id))}
                   />
-                </div>
+                </div>}
               </div>
 
               {open?.kind === "editMission" && open.id === m.id && <div className="mt-4"><MissionForm mission={m} onDone={close} /></div>}
@@ -118,11 +119,11 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="text-xs uppercase text-[#3E150F]/70">
-                      <tr><th className="py-2">Jour</th><th>Horaire</th><th>Inscrits</th><th>Places</th><th className="text-right">Actions</th></tr>
+                      <tr><th className="py-2">Jour</th><th>Horaire</th><th>Inscrits</th><th>Places</th>{canCreate && <th className="text-right">Actions</th>}</tr>
                     </thead>
                     <tbody>
                       {list.map((c) => (
-                        <CreneauRow key={c.id} c={c} jours={allJours} missionId={m.id} editing={open?.kind === "editCreneau" && open.id === c.id} onEdit={() => setOpen({ kind: "editCreneau", id: c.id })} onClose={close} />
+                        <CreneauRow key={c.id} readOnly={!canCreate} c={c} jours={allJours} missionId={m.id} editing={open?.kind === "editCreneau" && open.id === c.id} onEdit={() => setOpen({ kind: "editCreneau", id: c.id })} onClose={close} />
                       ))}
                     </tbody>
                   </table>
@@ -136,7 +137,7 @@ export default function MissionsBoard({ missions, creneaux, jours, editions, edi
   );
 }
 
-function CreneauRow({ c, jours, missionId, editing, onEdit, onClose }: { c: Creneau; jours: string[]; missionId: number; editing: boolean; onEdit: () => void; onClose: () => void }) {
+function CreneauRow({ c, jours, missionId, editing, onEdit, onClose, readOnly }: { readOnly: boolean; c: Creneau; jours: string[]; missionId: number; editing: boolean; onEdit: () => void; onClose: () => void }) {
   const n = occ(c);
   return (
     <>
@@ -147,7 +148,7 @@ function CreneauRow({ c, jours, missionId, editing, onEdit, onClose }: { c: Cren
           <Link href={`/admin/creneaux/${c.id}`} className="font-semibold text-[#7A291E] underline-offset-2 hover:underline">{n}/{c.capacite} · voir</Link>
         </td>
         <td className="pr-2"><PlacesPill restantes={c.restantes} capacite={c.capacite} /></td>
-        <td className="py-2 text-right">
+        {!readOnly && <td className="py-2 text-right">
           <span className="inline-flex flex-wrap items-start justify-end gap-2">
             <button type="button" onClick={onEdit} className="rounded-full border border-[#7A291E]/25 px-3 py-1 text-xs font-semibold text-[#7A291E] hover:border-[#7A291E]">Modifier</button>
             <ConfirmButton
@@ -155,7 +156,7 @@ function CreneauRow({ c, jours, missionId, editing, onEdit, onClose }: { c: Cren
               action={() => (n > 0 ? Promise.resolve({ ok: false, message: `${n} inscrit${n > 1 ? "s" : ""} : retirez-les d'abord (lien « voir »).` }) : adminDeleteCreneauAction(c.id))}
             />
           </span>
-        </td>
+        </td>}
       </tr>
       {editing && (
         <tr><td colSpan={5} className="pb-3"><CreneauForm missionId={missionId} creneau={c} jours={jours} onDone={onClose} /></td></tr>

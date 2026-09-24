@@ -143,7 +143,7 @@ export function toCreneauInscrits(json: Raw): CreneauInscrits {
   };
 }
 
-// EditionResource : id, nom, date_debut, date_fin, isActive
+// EditionResource : id, nom, date_debut, date_fin, isActive, isArchived
 export function toEdition(r: Raw): Edition {
   return {
     id: Number(r.id),
@@ -151,5 +151,6 @@ export function toEdition(r: Raw): Edition {
     debut: str(r.date_debut).slice(0, 10),
     fin: str(r.date_fin).slice(0, 10),
     active: !!r.isActive,
+    archived: !!r.isArchived,
   };
 }

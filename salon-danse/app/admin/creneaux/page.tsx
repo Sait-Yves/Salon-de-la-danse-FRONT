@@ -22,7 +22,7 @@ export default async function CreneauxAdmin({ searchParams }: { searchParams: Pr
   const editions = eds.ok ? eds.data : null;
   // Édition affichée : celle demandée dans l'URL, sinon l'active, sinon la plus récente.
   const edition: Edition | null = editions
-    ? editions.find((e) => e.id === Number(wanted)) ?? editions.find((e) => e.active) ?? editions[0] ?? null
+    ? editions.find((e) => e.id === Number(wanted)) ?? editions.find((e) => e.active) ?? editions.find((e) => !e.archived) ?? null
     : null;
 
   const r = await fetchAllCreneaux(true, edition?.id);

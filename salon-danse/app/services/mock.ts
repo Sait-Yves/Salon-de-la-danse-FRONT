@@ -8,7 +8,7 @@ type MUser = {
 };
 type MCreneau = { id: number; mission_id: number; jour: string; debut: string; fin: string; cap: number };
 type MMission = { id: number; nom: string; sensible: boolean; edition_id?: number };
-type MEdition = { id: number; nom: string; debut: string; fin: string; active: boolean };
+type MEdition = { id: number; nom: string; debut: string; fin: string; active: boolean; archived?: boolean };
 type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillon" | "valide" };
 type State = {
   users: MUser[]; missions: MMission[]; creneaux: MCreneau[]; res: MRes[];
@@ -151,7 +151,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
   const method = (init.method ?? "GET").toUpperCase();
   const body: any = typeof init.body === "string" ? JSON.parse(init.body) : init.body instanceof FormData ? Object.fromEntries(init.body.entries()) : {};
   const me = token?.startsWith("mock-") ? s.users.find((u) => u.id === Number(token.slice(5))) : undefined;
-  const pub = (method === "POST" && (p === "/login" || p === "/register"));
+  const pub = (method === "POST" && (p === "/login" || p === "/register" || p === "/forgot-password" || p === "/reset-password"));
   if (!pub && !me) throw new MockHttp(401, { message: "Unauthenticated." });
   const admin = p.startsWith("/admin");
   if (admin && me?.role !== "admin") throw new MockHttp(403, { message: "This action is unauthorized." });
@@ -176,6 +176,18 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     };
     s.users.push(u);
     return json(201, { data: { user: uJson(u, false), token: `mock-${u.id}`, token_type: "Bearer" } });
+  }
+  // Mot de passe oublié (démo : le code est toujours 123456)
+  if (method === "POST" && p === "/forgot-password") {
+    if (!/^\S+@\S+\.\S+$/.test(String(body.email ?? ""))) throw invalid("email", "L'adresse e-mail n'est pas valide.");
+    return json(200, { message: "Si un compte existe, un code a été envoyé." });
+  }
+  if (method === "POST" && p === "/reset-password") {
+    const u = s.users.find((x) => x.email === String(body.email ?? "").toLowerCase());
+    if (!u || body.token !== "123456") throw invalid("token", "Ce code est invalide ou a expiré.");
+    if (String(body.password ?? "").length < 8) throw invalid("password", "Le mot de passe doit contenir au moins 8 caractères.");
+    if (body.password !== body.password_confirmation) throw invalid("password", "La confirmation du mot de passe ne correspond pas.");
+    return json(200, { message: "Mot de passe réinitialisé." });
   }
   if (method === "POST" && p === "/logout") return json(204, null);
   if (method === "GET" && p === "/me") return json(200, { data: uJson(me!, false) });
@@ -244,7 +256,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
   const dateOk = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ""));
   s.editions ??= [{ id: 1, nom: "Démonstration 2026", debut: DAYS[0], fin: DAYS[DAYS.length - 1], active: true }];
   const eds = s.editions;
-  const eJson = (e: MEdition) => ({ id: e.id, nom: e.nom, date_debut: e.debut, date_fin: e.fin, isActive: e.active });
+  const eJson = (e: MEdition) => ({ id: e.id, nom: e.nom, date_debut: e.debut, date_fin: e.fin, isActive: e.active, isArchived: !!e.archived });
   const mJson = (x: MMission) => ({ id: x.id, edition_id: x.edition_id ?? 1, nom: x.nom, isSensible: x.sensible });
 
   if (method === "GET" && p === "/admin/editions") return json(200, { data: eds.map(eJson) });
@@ -277,7 +289,12 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     if (next.fin < next.debut) throw invalid("date_fin", "La date de fin doit être après la date de début.");
     const hors = s.creneaux.some((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === e.id && (c.jour < next.debut || c.jour > next.fin));
     if (hors) throw invalid("date_debut", "Des créneaux existants sortiraient des nouvelles dates.");
+    if (body.isArchived !== undefined) {
+      next.archived = bool(body.isArchived);
+      if (next.archived) next.active = false;
+    }
     if (body.isActive !== undefined) {
+      if (bool(body.isActive) && next.archived) throw invalid("isActive", "Une édition archivée ne peut pas être active.");
       next.active = bool(body.isActive);
       if (next.active) eds.forEach((x) => (x.active = false));
     }

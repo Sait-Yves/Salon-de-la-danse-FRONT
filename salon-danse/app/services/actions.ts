@@ -72,6 +72,37 @@ export async function registerAction(_prev: FormState, fd: FormData): Promise<Fo
   redirect("/dashboard");
 }
 
+// Mot de passe oublié, étape 1 : le back envoie un code par e-mail.
+export async function forgotPasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = field(fd, "email");
+  if (!email) return { fieldErrors: { email: "Entrez votre adresse e-mail." } };
+  const r = await api("/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+  // 422 sur l'e-mail = format invalide. Pour le reste, on ne dit pas si le compte existe.
+  if (!r.ok && r.status !== 404) return Object.keys(r.fieldErrors).length ? { fieldErrors: r.fieldErrors } : { error: r.message };
+  return { ok: true, message: email };
+}
+
+// Étape 2 : code reçu + nouveau mot de passe. Le back déconnecte toutes les sessions du compte.
+export async function resetPasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = field(fd, "email");
+  const token = field(fd, "token");
+  const password = String(fd.get("password") ?? "");
+  const confirmation = String(fd.get("password_confirmation") ?? "");
+  const errors: Record<string, string> = {};
+  if (!email) errors.email = "Entrez votre adresse e-mail.";
+  if (!token) errors.token = "Entrez le code reçu par e-mail.";
+  if (password.length < 8) errors.password = "8 caractères minimum.";
+  else if (password !== confirmation) errors.password_confirmation = "Les mots de passe ne correspondent pas.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+  const r = await api("/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ email, token, password, password_confirmation: confirmation }),
+  });
+  if (!r.ok) return Object.keys(r.fieldErrors).length ? { fieldErrors: r.fieldErrors } : { error: r.message };
+  (await cookies()).delete(TOKEN_COOKIE);
+  redirect("/login?mode=password&reset=1");
+}
+
 export async function logoutAction() {
   await api("/logout", { method: "POST" });
   (await cookies()).delete(TOKEN_COOKIE);
@@ -198,6 +229,14 @@ export async function adminSaveEditionAction(_prev: FormState, fd: FormData): Pr
 // Activer une édition désactive automatiquement les autres (règle du back).
 export async function adminActivateEditionAction(editionId: number): Promise<ActionResult> {
   const r = await api(`/admin/editions/${editionId}`, { method: "PATCH", body: JSON.stringify({ isActive: true }) });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+// Archiver une édition, ou la restaurer (et l'activer).
+export async function adminArchiveEditionAction(editionId: number, archive: boolean): Promise<ActionResult> {
+  const body = archive ? { isArchived: true } : { isArchived: false, isActive: true };
+  const r = await api(`/admin/editions/${editionId}`, { method: "PATCH", body: JSON.stringify(body) });
   refreshAdmin();
   return { ok: r.ok, message: r.ok ? undefined : r.message };
 }

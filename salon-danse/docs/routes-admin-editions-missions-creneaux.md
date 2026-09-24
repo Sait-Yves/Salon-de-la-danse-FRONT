@@ -11,10 +11,15 @@ traduit dans `app/services/adapters.ts`, et nulle part ailleurs.
 | GET | `/admin/editions` | Barre « Édition » de la page Missions. Les stats et la fiche bénévole se limitent à l'édition active |
 | GET | `/admin/editions/{id}` | — |
 | POST | `/admin/editions` | « + Édition » : `{ nom, date_debut, date_fin, isActive }` |
-| PATCH | `/admin/editions/{id}` | « Modifier » (nom, dates) et « Rendre active » (`{ isActive: true }`) |
+| PATCH | `/admin/editions/{id}` | « Modifier » (nom, dates), « Rendre active » (`{ isActive: true }`), « Archiver » (`{ isArchived: true }`), « Restaurer et activer » (`{ isArchived: false, isActive: true }`) |
 | DELETE | `/admin/editions/{id}` | « Supprimer » |
 
 Une seule édition est active : en activer une désactive les autres (règle du back).
+
+Côté front :
+
+- une édition archivée est rangée dans « Archives » et s'affiche en lecture seule ;
+- le bouton « Archiver » n'apparaît que sur une édition qui n'est pas active.
 
 ## Missions
 
@@ -47,6 +52,15 @@ Une seule édition est active : en activer une désactive les autres (règle du 
 
   Le front bloque d'avance, en 2 clics, avec un message qui dit quoi supprimer d'abord.
   Les inscrits se retirent depuis la page du créneau.
+
+## Mot de passe oublié (routes publiques)
+
+| Méthode | Endpoint | Utilisé par le front |
+|---|---|---|
+| POST | `/forgot-password` | Page `/mot-de-passe-oublie`, étape 1 : `{ email }`. Le back envoie un code par e-mail |
+| POST | `/reset-password` | Étape 2 : `{ email, token, password, password_confirmation }`. Déconnecte toutes les sessions du compte, puis renvoie vers la connexion |
+
+Le lien « Mot de passe oublié ? » est sur la page de connexion. Un lien `/mot-de-passe-oublie?email=…&token=…` ouvre directement l'étape 2 : Louis peut le mettre dans l'e-mail.
 
 ## Autres routes admin utilisées
 

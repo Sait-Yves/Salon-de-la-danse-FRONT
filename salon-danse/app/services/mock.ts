@@ -7,12 +7,13 @@ type MUser = {
   role: "admin" | "benevole"; isMineur: boolean; statut_planning: "brouillon" | "valide"; photo: boolean;
 };
 type MCreneau = { id: number; mission_id: number; jour: string; debut: string; fin: string; cap: number };
-type MMission = { id: number; nom: string; sensible: boolean };
+type MMission = { id: number; nom: string; sensible: boolean; edition_id?: number };
+type MEdition = { id: number; nom: string; debut: string; fin: string; active: boolean };
 type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillon" | "valide" };
 type State = {
   users: MUser[]; missions: MMission[]; creneaux: MCreneau[]; res: MRes[];
   codes: { id: number; code: string; isActive: boolean }[]; nextRes: number; nextUser: number; nextCode: number;
-  nextMission?: number; nextCreneau?: number;
+  nextMission?: number; nextCreneau?: number; editions?: MEdition[]; nextEdition?: number;
 };
 
 const DAYS = ["2026-10-09", "2026-10-10", "2026-10-11"];
@@ -98,7 +99,7 @@ const cJson = (c: MCreneau, admin: boolean, withCount: boolean) => {
   return {
     id: c.id, jour: c.jour, heure_debut: `${c.debut}:00`, heure_fin: `${c.fin}:00`, capacite_max: c.cap,
     ...(withCount ? { places_restantes: Math.max(0, c.cap - s.res.filter((r) => r.creneau_id === c.id).length) } : {}),
-    mission: { id: m.id, edition_id: 1, nom: m.nom, ...(admin ? { isSensible: m.sensible } : {}) },
+    mission: { id: m.id, edition_id: m.edition_id ?? 1, nom: m.nom, ...(admin ? { isSensible: m.sensible } : {}) },
   };
 };
 const rJson = (r: MRes, admin: boolean) => {
@@ -189,6 +190,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     let list = s.creneaux.filter((c) => admin || !s.missions.find((x) => x.id === c.mission_id)!.sensible);
     if (q.get("jour")) list = list.filter((c) => c.jour === q.get("jour"));
     if (q.get("mission_id")) list = list.filter((c) => c.mission_id === Number(q.get("mission_id")));
+    if (q.get("edition_id")) list = list.filter((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === Number(q.get("edition_id")));
     const pg = paginate(list, Number(q.get("page") ?? 1), Number(q.get("per_page") ?? 50));
     return json(200, { ...pg, data: pg.data.map((c) => cJson(c, admin, true)) });
   }
@@ -236,17 +238,64 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     } });
   }
 
-  /* ---- missions et créneaux : contrat proposé à Louis (pas encore dans le back) ---- */
-  const mJson = (x: MMission) => ({ id: x.id, edition_id: 1, nom: x.nom, isSensible: x.sensible });
+  /* ---- éditions, missions et créneaux (routes CRUD de Louis) ---- */
   const bool = (v: any) => v === true || v === 1 || v === "1" || v === "true";
   const hhmmOk = (v: any) => /^\d{2}:\d{2}(:\d{2})?$/.test(String(v ?? ""));
-  if (method === "GET" && p === "/admin/missions") return json(200, { data: s.missions.map(mJson) });
+  const dateOk = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ""));
+  s.editions ??= [{ id: 1, nom: "Démonstration 2026", debut: DAYS[0], fin: DAYS[DAYS.length - 1], active: true }];
+  const eds = s.editions;
+  const eJson = (e: MEdition) => ({ id: e.id, nom: e.nom, date_debut: e.debut, date_fin: e.fin, isActive: e.active });
+  const mJson = (x: MMission) => ({ id: x.id, edition_id: x.edition_id ?? 1, nom: x.nom, isSensible: x.sensible });
+
+  if (method === "GET" && p === "/admin/editions") return json(200, { data: eds.map(eJson) });
+  if (method === "POST" && p === "/admin/editions") {
+    const nom = String(body.nom ?? "").trim();
+    if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
+    if (!dateOk(body.date_debut)) throw invalid("date_debut", "La date de début est invalide.");
+    if (!dateOk(body.date_fin) || body.date_fin < body.date_debut) throw invalid("date_fin", "La date de fin doit être après la date de début.");
+    s.nextEdition ??= Math.max(0, ...eds.map((e) => e.id)) + 1;
+    const e: MEdition = { id: s.nextEdition++, nom, debut: body.date_debut, fin: body.date_fin, active: bool(body.isActive) };
+    if (e.active) eds.forEach((x) => (x.active = false));
+    eds.push(e);
+    return json(201, { data: eJson(e) });
+  }
+  if ((method === "GET" || method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/editions\/(\d+)$/))) {
+    const e = eds.find((x) => x.id === Number(m![1]));
+    if (!e) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (method === "GET") return json(200, { data: eJson(e) });
+    if (method === "DELETE") {
+      const n = s.missions.filter((x) => (x.edition_id ?? 1) === e.id).length;
+      if (n > 0) throw biz("Suppression impossible : des missions dépendent encore de cette édition.");
+      eds.splice(eds.indexOf(e), 1);
+      return json(204, null);
+    }
+    const next = { ...e };
+    if (body.nom !== undefined) next.nom = String(body.nom).trim();
+    if (body.date_debut !== undefined) next.debut = String(body.date_debut);
+    if (body.date_fin !== undefined) next.fin = String(body.date_fin);
+    if (!next.nom) throw invalid("nom", "Le champ nom est obligatoire.");
+    if (next.fin < next.debut) throw invalid("date_fin", "La date de fin doit être après la date de début.");
+    const hors = s.creneaux.some((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === e.id && (c.jour < next.debut || c.jour > next.fin));
+    if (hors) throw invalid("date_debut", "Des créneaux existants sortiraient des nouvelles dates.");
+    if (body.isActive !== undefined) {
+      next.active = bool(body.isActive);
+      if (next.active) eds.forEach((x) => (x.active = false));
+    }
+    Object.assign(e, next);
+    return json(200, { data: eJson(e) });
+  }
+
+  if (method === "GET" && p === "/admin/missions") {
+    const list = s.missions.filter((x) => !q.get("edition_id") || (x.edition_id ?? 1) === Number(q.get("edition_id")));
+    return json(200, { data: list.map(mJson) });
+  }
   if (method === "POST" && p === "/admin/missions") {
     const nom = String(body.nom ?? "").trim();
-    if (!nom) throw invalid("nom", "Le nom de la mission est obligatoire.");
-    if (s.missions.some((x) => x.nom.toLowerCase() === nom.toLowerCase())) throw invalid("nom", "Une mission porte déjà ce nom.");
+    const edition = eds.find((e) => e.id === Number(body.edition_id));
+    if (!edition) throw invalid("edition_id", "L'édition sélectionnée est invalide.");
+    if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
     s.nextMission ??= Math.max(0, ...s.missions.map((x) => x.id)) + 1;
-    const x: MMission = { id: s.nextMission++, nom, sensible: bool(body.isSensible) };
+    const x: MMission = { id: s.nextMission++, nom, sensible: bool(body.isSensible), edition_id: edition.id };
     s.missions.push(x);
     return json(201, { data: mJson(x) });
   }
@@ -256,23 +305,21 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     if (method === "PATCH") {
       if (body.nom !== undefined) {
         const nom = String(body.nom).trim();
-        if (!nom) throw invalid("nom", "Le nom de la mission est obligatoire.");
+        if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
         x.nom = nom;
       }
       if (body.isSensible !== undefined) x.sensible = bool(body.isSensible);
       return json(200, { data: mJson(x) });
     }
-    const ids = s.creneaux.filter((c) => c.mission_id === x.id).map((c) => c.id);
-    const n = s.res.filter((r) => ids.includes(r.creneau_id)).length;
-    if (n > 0) throw biz(`Impossible de supprimer : ${n} bénévole${n > 1 ? "s sont inscrits" : " est inscrit"} sur cette mission.`);
-    s.creneaux = s.creneaux.filter((c) => c.mission_id !== x.id);
+    if (s.creneaux.some((c) => c.mission_id === x.id)) throw biz("Suppression impossible : des créneaux dépendent encore de cette mission.");
     s.missions.splice(s.missions.indexOf(x), 1);
     return json(204, null);
   }
-  function checkCreneau(c: { jour: string; debut: string; fin: string; cap: number }) {
-    if (!DAYS.includes(c.jour)) throw invalid("jour", "Le jour doit être compris dans les dates de l'édition.");
+  function checkCreneau(c: { mission_id: number; jour: string; debut: string; fin: string; cap: number }) {
+    const e = eds.find((x) => x.id === (s.missions.find((y) => y.id === c.mission_id)?.edition_id ?? 1));
+    if (!e || c.jour < e.debut || c.jour > e.fin) throw invalid("jour", "Le jour doit être compris dans les dates de l'édition.");
     if (!(c.fin > c.debut)) throw invalid("heure_fin", "L'heure de fin doit être après l'heure de début.");
-    if (!(c.cap >= 1)) throw invalid("capacite_max", "La capacité doit être d'au moins 1 place.");
+    if (!(c.cap >= 1)) throw invalid("capacite_max", "La capacité doit être d'au moins 1.");
   }
   if (method === "POST" && p === "/admin/creneaux") {
     const mission = s.missions.find((x) => x.id === Number(body.mission_id));
@@ -291,11 +338,12 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
     const n = s.res.filter((r) => r.creneau_id === c.id).length;
     if (method === "DELETE") {
-      if (n > 0) throw biz(`Impossible de supprimer : ${n} bénévole${n > 1 ? "s sont inscrits" : " est inscrit"} sur ce créneau. Retirez-les d'abord.`);
+      if (n > 0) throw biz("Suppression impossible : des réservations dépendent encore de ce créneau.");
       s.creneaux.splice(s.creneaux.indexOf(c), 1);
       return json(204, null);
     }
     const next = {
+      mission_id: c.mission_id,
       jour: body.jour !== undefined ? String(body.jour) : c.jour,
       debut: body.heure_debut !== undefined ? String(body.heure_debut).slice(0, 5) : c.debut,
       fin: body.heure_fin !== undefined ? String(body.heure_fin).slice(0, 5) : c.fin,

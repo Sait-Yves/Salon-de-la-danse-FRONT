@@ -1,8 +1,8 @@
 // Lectures de données côté serveur, utilisées par les pages.
 import { cache } from "react";
 import { api, getToken, type ApiResult } from "./api";
-import { toCreneau, toCreneauInscrits, toList, toMission, toPage, toPlanningRow, toReservation, toUser } from "./adapters";
-import type { Creneau, CreneauInscrits, Mission, Page, PlanningRow, Reservation, Result, User } from "./types";
+import { toCreneau, toCreneauInscrits, toEdition, toList, toMission, toPage, toPlanningRow, toReservation, toUser } from "./adapters";
+import type { Creneau, CreneauInscrits, Edition, Mission, Page, PlanningRow, Reservation, Result, User } from "./types";
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = <T>(r: ApiResult): Result<T> => ({ ok: false, error: r.message, status: r.status });
@@ -16,13 +16,14 @@ export const getMe = cache(async (): Promise<User | null> => {
 });
 
 // Tous les créneaux (parcourt les pages de 100). admin = missions sensibles incluses.
-export async function fetchAllCreneaux(admin = false): Promise<Result<Creneau[]>> {
-  const base = admin ? "/admin/creneaux" : "/creneaux";
+// editionId (admin) : seulement les créneaux de cette édition.
+export async function fetchAllCreneaux(admin = false, editionId?: number): Promise<Result<Creneau[]>> {
+  const base = admin ? `/admin/creneaux${editionId ? `?edition_id=${editionId}&` : "?"}` : "/creneaux?";
   const items: Creneau[] = [];
   let page = 1;
   let last = 1;
   do {
-    const r = await api(`${base}?per_page=100&page=${page}`);
+    const r = await api(`${base}per_page=100&page=${page}`);
     if (!r.ok) return fail(r);
     const p = toPage(r.json, toCreneau);
     items.push(...p.items);
@@ -105,17 +106,32 @@ export async function fetchInscrits(creneauId: number): Promise<Result<CreneauIn
   return ok(toCreneauInscrits(r.json));
 }
 
-// Missions : GET /admin/missions si le back l'expose, sinon déduites des créneaux
-// (dans ce cas, une mission sans créneau n'apparaît pas).
-export async function fetchMissions(creneaux: Creneau[]): Promise<{ missions: Mission[]; fromApi: boolean }> {
-  const r = await api("/admin/missions");
+// Id de l'édition active (null si aucune ou si la route échoue : pas de filtre).
+export const getActiveEditionId = cache(async (): Promise<number | null> => {
+  const r = await fetchEditions();
+  if (!r.ok) return null;
+  return r.data.find((e) => e.active)?.id ?? null;
+});
+
+// Éditions (GET /admin/editions). Une seule est active à la fois.
+export async function fetchEditions(): Promise<Result<Edition[]>> {
+  const r = await api("/admin/editions");
+  if (!r.ok) return fail(r);
+  return ok(toList(r.json, toEdition).sort((x, y) => y.debut.localeCompare(x.debut)));
+}
+
+// Missions d'une édition (GET /admin/missions?edition_id=).
+// Si la route échoue, on les déduit des créneaux (une mission sans créneau n'apparaît pas).
+export async function fetchMissions(creneaux: Creneau[], editionId?: number): Promise<{ missions: Mission[]; fromApi: boolean }> {
+  const r = await api(`/admin/missions${editionId ? `?edition_id=${editionId}` : ""}`);
   if (r.ok && Array.isArray(r.json?.data)) {
-    return { missions: toList(r.json, toMission), fromApi: true };
+    const list = toList(r.json, toMission);
+    return { missions: editionId ? list.filter((m) => m.editionId == null || m.editionId === editionId) : list, fromApi: true };
   }
   const map = new Map<number, Mission>();
   for (const c of creneaux) {
     if (c.missionId != null && !map.has(c.missionId)) {
-      map.set(c.missionId, { id: c.missionId, editionId: null, nom: c.mission, sensible: c.sensible });
+      map.set(c.missionId, { id: c.missionId, editionId: editionId ?? null, nom: c.mission, sensible: c.sensible });
     }
   }
   return { missions: [...map.values()], fromApi: false };
@@ -135,11 +151,12 @@ export interface Stats {
 
 // Compteurs du tableau de bord, calculés à partir des routes existantes.
 export async function fetchStats(): Promise<Result<Stats>> {
+  const editionId = (await getActiveEditionId()) ?? undefined;
   const [all, valides, mineurs, creneaux] = await Promise.all([
     fetchUsers({ role: "benevole", perPage: 1 }),
     fetchUsers({ role: "benevole", statut: "valide", perPage: 1 }),
     fetchUsers({ role: "benevole", mineur: true, perPage: 1 }),
-    fetchAllCreneaux(true),
+    fetchAllCreneaux(true, editionId),
   ]);
   if (!all.ok) return all;
   if (!valides.ok) return valides;

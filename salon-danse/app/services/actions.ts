@@ -172,8 +172,41 @@ export async function sendInvitationAction(_prev: FormState, fd: FormData): Prom
 }
 
 /* ------------------------- Admin : missions et créneaux ------------------------ */
-// Routes proposées à Louis (voir docs/contrat-missions-creneaux.md).
-// Tant qu'elles n'existent pas, api() renvoie « pas encore disponible sur le serveur ».
+// Routes CRUD de Louis (voir docs/routes-admin-editions-missions-creneaux.md).
+
+export async function adminSaveEditionAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const nom = field(fd, "nom");
+  const debut = field(fd, "date_debut");
+  const fin = field(fd, "date_fin");
+  const errors: Record<string, string> = {};
+  if (!nom) errors.nom = "Donnez un nom à l'édition.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(debut)) errors.date_debut = "Date invalide.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fin)) errors.date_fin = "Date invalide.";
+  else if (debut && fin < debut) errors.date_fin = "Doit être après le début.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+  const payload: Record<string, unknown> = { nom, date_debut: debut, date_fin: fin };
+  if (!id) payload.isActive = fd.get("isActive") === "1";
+  const r = id
+    ? await api(`/admin/editions/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
+    : await api("/admin/editions", { method: "POST", body: JSON.stringify(payload) });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Édition modifiée." : `Édition « ${nom} » créée.` };
+}
+
+// Activer une édition désactive automatiquement les autres (règle du back).
+export async function adminActivateEditionAction(editionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/editions/${editionId}`, { method: "PATCH", body: JSON.stringify({ isActive: true }) });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+export async function adminDeleteEditionAction(editionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/editions/${editionId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
 
 const HHMM = /^\d{2}:\d{2}$/;
 
@@ -181,7 +214,8 @@ export async function adminSaveMissionAction(_prev: FormState, fd: FormData): Pr
   const id = field(fd, "id");
   const nom = field(fd, "nom");
   if (!nom) return { fieldErrors: { nom: "Donnez un nom à la mission." } };
-  const body = JSON.stringify({ nom, isSensible: fd.get("isSensible") === "1" });
+  const editionId = Number(field(fd, "edition_id")) || undefined;
+  const body = JSON.stringify({ nom, isSensible: fd.get("isSensible") === "1", ...(id ? {} : { edition_id: editionId }) });
   const r = id
     ? await api(`/admin/missions/${id}`, { method: "PATCH", body })
     : await api("/admin/missions", { method: "POST", body });

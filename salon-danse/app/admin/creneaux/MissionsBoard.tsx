@@ -5,9 +5,10 @@ import { useMemo, useState } from "react";
 import { adminDeleteCreneauAction, adminDeleteMissionAction } from "../../services/actions";
 import { formatJour } from "../../services/config";
 import { PlacesPill } from "../../_components/Gauge";
-import type { Creneau, Mission } from "../../services/types";
+import type { Creneau, Edition, Mission } from "../../services/types";
 import ConfirmButton from "./ConfirmButton";
 import { CreneauForm, MissionForm } from "./Forms";
+import EditionsBar from "./EditionsBar";
 
 type Open =
   | { kind: "newMission" }
@@ -18,7 +19,13 @@ type Open =
 
 const occ = (c: Creneau) => (c.restantes == null ? 0 : Math.max(0, c.capacite - c.restantes));
 
-export default function MissionsBoard({ missions, creneaux, jours }: { missions: Mission[]; creneaux: Creneau[]; jours: string[] }) {
+export default function MissionsBoard({ missions, creneaux, jours, editions, edition }: {
+  missions: Mission[];
+  creneaux: Creneau[];
+  jours: string[];
+  editions: Edition[] | null; // null : route des éditions indisponible
+  edition: Edition | null;
+}) {
   const [open, setOpen] = useState<Open>(null);
   const [jour, setJour] = useState("");
   const close = () => setOpen(null);
@@ -35,6 +42,8 @@ export default function MissionsBoard({ missions, creneaux, jours }: { missions:
 
   const sorted = useMemo(() => [...missions].sort((a, b) => a.nom.localeCompare(b.nom)), [missions]);
   const allJours = useMemo(() => [...new Set([...jours, ...creneaux.map((c) => c.jour)])].sort(), [jours, creneaux]);
+  // Sans édition, on ne peut pas créer de mission (le back exige edition_id).
+  const canCreate = editions == null || edition != null;
 
   const complets = creneaux.filter((c) => c.restantes === 0).length;
   const faibles = creneaux.filter((c) => c.restantes != null && c.capacite > 0 && occ(c) / c.capacite < 0.3).length;
@@ -45,13 +54,18 @@ export default function MissionsBoard({ missions, creneaux, jours }: { missions:
         <div>
           <h1 className="font-['Montserrat'] text-2xl font-black">Missions et créneaux</h1>
           <p className="text-sm text-white/75">
-            {missions.length} missions · {creneaux.length} créneaux · {complets} complets · {faibles} remplis à moins de 30 %
+            {edition ? `${edition.nom} · ` : ""}{missions.length} missions · {creneaux.length} créneaux · {complets} complets · {faibles} remplis à moins de 30 %
           </p>
         </div>
-        <button type="button" onClick={() => setOpen({ kind: "newMission" })} className="btn-pill btn-pill-inverse shrink-0 text-sm">+ Nouvelle mission</button>
+        {canCreate && <button type="button" onClick={() => setOpen({ kind: "newMission" })} className="btn-pill btn-pill-inverse shrink-0 text-sm">+ Nouvelle mission</button>}
       </div>
 
-      {open?.kind === "newMission" && <MissionForm onDone={close} />}
+      {editions && <EditionsBar editions={editions} current={edition} missionsCount={missions.length} />}
+      {editions && editions.length === 0 && (
+        <p className="official-card p-5 text-center text-sm">Aucune édition. Créez-en une avec « + Édition » pour ajouter des missions.</p>
+      )}
+
+      {open?.kind === "newMission" && <MissionForm editionId={edition?.id} onDone={close} />}
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer par jour">
         <button type="button" onClick={() => setJour("")} className={`btn-pill text-xs !px-4 !py-2 ${!jour ? "btn-pill-primary" : "btn-pill-ghost"}`}>Tous les jours</button>
@@ -88,8 +102,9 @@ export default function MissionsBoard({ missions, creneaux, jours }: { missions:
                   <button type="button" onClick={() => setOpen({ kind: "editMission", id: m.id })} className="rounded-full border border-[#7A291E]/25 px-3 py-1 text-xs font-semibold text-[#7A291E] hover:border-[#7A291E]">Modifier</button>
                   <ConfirmButton
                     label="Supprimer"
-                    confirm={all.length ? `Supprimer avec ses ${all.length} créneaux ?` : "Confirmer ?"}
-                    action={() => (inscrits > 0 ? Promise.resolve({ ok: false, message: `${inscrits} bénévole${inscrits > 1 ? "s sont inscrits" : " est inscrit"} sur cette mission : retirez-les d'abord.` }) : adminDeleteMissionAction(m.id))}
+                    action={() => (all.length > 0
+                      ? Promise.resolve({ ok: false, message: `Supprimez d'abord ${all.length > 1 ? `ses ${all.length} créneaux` : "son créneau"}${inscrits > 0 ? ` (${inscrits} inscrit${inscrits > 1 ? "s" : ""} à retirer)` : ""}.` })
+                      : adminDeleteMissionAction(m.id))}
                   />
                 </div>
               </div>

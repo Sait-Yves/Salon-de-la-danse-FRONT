@@ -1,10 +1,10 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { adminSaveCreneauAction, adminSaveMissionAction } from "../../services/actions";
+import { adminSaveCreneauAction, adminSaveEditionAction, adminSaveMissionAction } from "../../services/actions";
 import { formatJour } from "../../services/config";
 import { Alert, SubmitButton } from "../../_components/ui";
-import type { Creneau, FormState, Mission } from "../../services/types";
+import type { Creneau, Edition, FormState, Mission } from "../../services/types";
 
 function Err({ msg }: { msg?: string }) {
   return msg ? <p className="mt-1 text-xs font-semibold text-red-700">{msg}</p> : null;
@@ -17,13 +17,14 @@ function useCloseOnSuccess(state: FormState, onDone: () => void) {
 }
 
 // Création ou modification d'une mission.
-export function MissionForm({ mission, onDone }: { mission?: Mission; onDone: () => void }) {
+export function MissionForm({ mission, editionId, onDone }: { mission?: Mission; editionId?: number; onDone: () => void }) {
   const [state, action] = useActionState<FormState, FormData>(adminSaveMissionAction, {});
   useCloseOnSuccess(state, onDone);
   const fe = state.fieldErrors ?? {};
   return (
     <form action={action} className="animate-fade-in space-y-3 rounded-2xl bg-[#7A291E]/5 p-4">
       {mission && <input type="hidden" name="id" value={mission.id} />}
+      {!mission && editionId != null && <input type="hidden" name="edition_id" value={editionId} />}
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <div>
           <label htmlFor={`nom-${mission?.id ?? "new"}`} className="field-label">Nom de la mission</label>
@@ -80,6 +81,44 @@ export function CreneauForm({ missionId, creneau, jours, onDone }: { missionId: 
       {state.error && <Alert>{state.error}</Alert>}
       <div className="flex gap-2">
         <SubmitButton pending="Enregistrement…" className="btn-pill btn-pill-primary text-sm !py-2">{creneau ? "Enregistrer" : "Ajouter le créneau"}</SubmitButton>
+        <button type="button" onClick={onDone} className="btn-pill btn-pill-ghost text-sm !py-2">Annuler</button>
+      </div>
+    </form>
+  );
+}
+
+// Création ou modification d'une édition (nom et dates).
+export function EditionForm({ edition, onDone }: { edition?: Edition; onDone: () => void }) {
+  const [state, action] = useActionState<FormState, FormData>(adminSaveEditionAction, {});
+  useCloseOnSuccess(state, onDone);
+  const fe = state.fieldErrors ?? {};
+  const k = edition?.id ?? "new";
+  return (
+    <form action={action} className="animate-fade-in space-y-3 rounded-2xl bg-[#7A291E]/5 p-4">
+      {edition && <input type="hidden" name="id" value={edition.id} />}
+      <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
+        <div>
+          <label htmlFor={`ed-nom-${k}`} className="field-label">Nom de l&apos;édition</label>
+          <input id={`ed-nom-${k}`} name="nom" defaultValue={edition?.nom ?? ""} className="field" placeholder="Ex. Salon de la Danse 2027" required autoFocus />
+          <Err msg={fe.nom} />
+        </div>
+        <div>
+          <label htmlFor={`ed-deb-${k}`} className="field-label">Premier jour</label>
+          <input id={`ed-deb-${k}`} name="date_debut" type="date" defaultValue={edition?.debut ?? ""} className="field" required />
+          <Err msg={fe.date_debut} />
+        </div>
+        <div>
+          <label htmlFor={`ed-fin-${k}`} className="field-label">Dernier jour</label>
+          <input id={`ed-fin-${k}`} name="date_fin" type="date" defaultValue={edition?.fin ?? ""} className="field" required />
+          <Err msg={fe.date_fin} />
+        </div>
+      </div>
+      {!edition && (
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isActive" value="1" /> En faire l&apos;édition active</label>
+      )}
+      {state.error && <Alert>{state.error}</Alert>}
+      <div className="flex gap-2">
+        <SubmitButton pending="Enregistrement…" className="btn-pill btn-pill-primary text-sm !py-2">{edition ? "Enregistrer" : "Créer l'édition"}</SubmitButton>
         <button type="button" onClick={onDone} className="btn-pill btn-pill-ghost text-sm !py-2">Annuler</button>
       </div>
     </form>

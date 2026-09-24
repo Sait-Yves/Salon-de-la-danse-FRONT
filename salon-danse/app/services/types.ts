@@ -37,6 +37,14 @@ export interface Reservation {
   creneau: Creneau;
 }
 
+export interface Edition {
+  id: number;
+  nom: string;
+  debut: string; // AAAA-MM-JJ
+  fin: string;
+  active: boolean;
+}
+
 export interface Mission {
   id: number;
   editionId: number | null;

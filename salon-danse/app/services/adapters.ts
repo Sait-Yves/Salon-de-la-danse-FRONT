@@ -4,6 +4,7 @@
 
 import type {
   Creneau,
+  Edition,
   CreneauInscrits,
   Inscrit,
   Mission,
@@ -89,7 +90,7 @@ export function toPage<T>(json: Raw, map: (r: Raw) => T): Page<T> {
   };
 }
 
-// Mission (GET /admin/missions, proposé à Louis) : id, edition_id, nom, isSensible
+// MissionResource (GET /admin/missions) : id, edition_id, nom, isSensible
 export function toMission(r: Raw): Mission {
   return {
     id: Number(r.id),
@@ -139,5 +140,16 @@ export function toCreneauInscrits(json: Raw): CreneauInscrits {
     creneau: d?.creneau ? toCreneau(d.creneau) : null,
     restantes: rest == null ? null : Number(rest),
     inscrits: list.map(toInscrit).filter((i: Inscrit) => Number.isFinite(i.reservationId)),
+  };
+}
+
+// EditionResource : id, nom, date_debut, date_fin, isActive
+export function toEdition(r: Raw): Edition {
+  return {
+    id: Number(r.id),
+    nom: str(r.nom) || "Édition",
+    debut: str(r.date_debut).slice(0, 10),
+    fin: str(r.date_fin).slice(0, 10),
+    active: !!r.isActive,
   };
 }

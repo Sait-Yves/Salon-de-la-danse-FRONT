@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchAllCreneaux, fetchUserPlanning, findUser, getMe } from "../../../services/loaders";
+import { fetchAllCreneaux, fetchUserPlanning, findUser, getActiveEditionId, getMe } from "../../../services/loaders";
 import StatusBadge from "../../../_components/StatusBadge";
 import ErrorCard from "../../../_components/ErrorCard";
 import StatusToggle from "../../StatusToggle";
@@ -13,7 +13,7 @@ export default async function BenevolePage({ params }: { params: Promise<{ id: s
   if (!user.ok) return <ErrorCard message={user.error} status={user.status} />;
   if (!user.data) return <ErrorCard title="Bénévole introuvable" message="Ce compte n'existe pas." />;
   const u = user.data;
-  const [planning, creneaux, me] = await Promise.all([fetchUserPlanning(id), fetchAllCreneaux(true), getMe()]);
+  const [planning, creneaux, me] = await Promise.all([fetchUserPlanning(id), getActiveEditionId().then((e) => fetchAllCreneaux(true, e ?? undefined)), getMe()]);
 
   return (
     <>

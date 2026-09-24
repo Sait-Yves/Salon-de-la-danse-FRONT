@@ -28,7 +28,7 @@ export default function ConfirmButton({
   }
 
   return (
-    <span className="inline-flex flex-col items-end">
+    <span className="relative inline-flex">
       <button
         type="button"
         disabled={pending}
@@ -38,7 +38,7 @@ export default function ConfirmButton({
       >
         {pending ? "…" : armed ? confirm : label}
       </button>
-      {error && <span role="alert" className="mt-1 max-w-64 text-right text-[11px] font-semibold text-red-700">{error}</span>}
+      {error && <span role="alert" className="absolute right-0 top-full z-10 mt-1 w-max max-w-64 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-right text-[11px] font-semibold text-red-700 shadow-sm">{error}</span>}
     </span>
   );
 }

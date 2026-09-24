@@ -3,6 +3,8 @@
 
 export type Role = "admin" | "benevole";
 export type StatutPlanning = "brouillon" | "valide";
+// Validation admin d'une réservation sur mission sensible (null = pas de validation nécessaire).
+export type ValidationAdmin = "en_attente" | "acceptee" | "refusee" | null;
 
 export interface User {
   id: number;
@@ -14,13 +16,14 @@ export interface User {
   isMineur: boolean;
   statutPlanning: StatutPlanning;
   hasPhoto: boolean;
+  demandesEnAttente: number; // demandes sensibles en attente (0 si non renvoyé)
 }
 
 export interface Creneau {
   id: number;
   missionId: number | null;
   mission: string;
-  sensible: boolean; // renvoyé seulement par les routes /admin
+  sensible: boolean;
   jour: string; // AAAA-MM-JJ
   debut: string; // HH:MM
   fin: string; // HH:MM
@@ -33,8 +36,16 @@ export interface Reservation {
   // identifiant de la RÉSERVATION (pas du créneau) : sert au DELETE
   id: number;
   statut: StatutPlanning;
+  validation: ValidationAdmin;
   userId: number | null;
   creneau: Creneau;
+}
+
+// Une demande sensible dans la file des validations (GET /admin/validations).
+export interface Demande {
+  reservation: Reservation;
+  user: User;
+  creeLe: string; // ISO
 }
 
 export interface Edition {
@@ -57,6 +68,7 @@ export interface Mission {
 export interface Inscrit {
   reservationId: number;
   statut: StatutPlanning;
+  validation: ValidationAdmin;
   user: User;
 }
 

@@ -120,7 +120,9 @@ function refreshPlanning() {
 export async function reserveAction(creneauId: number): Promise<ActionResult> {
   const r = await api("/reservations", { method: "POST", body: JSON.stringify({ creneau_id: creneauId }) });
   refreshPlanning();
-  return { ok: r.ok, message: r.ok ? undefined : r.message };
+  if (!r.ok) return { ok: false, message: r.message };
+  const enAttente = r.json?.data?.validation_admin === "en_attente";
+  return { ok: true, message: enAttente ? "Demande envoyée : un administrateur doit la valider. Vous recevrez un e-mail." : undefined };
 }
 
 // reservationId = id de la RÉSERVATION (pas du créneau)
@@ -306,6 +308,16 @@ export async function adminRemoveInscritAction(userId: number, reservationId: nu
     const unlock = await api(`/admin/users/${userId}/planning/deverrouiller`, { method: "POST" });
     if (unlock.ok) r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
   }
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+/* ------------------------- Admin : demandes sensibles -------------------------- */
+
+// Accepter ou refuser une demande sur mission sensible.
+// Refus : le back supprime la réservation et repasse le planning du bénévole en brouillon.
+export async function adminDecideAction(reservationId: number, decision: "acceptee" | "refusee"): Promise<ActionResult> {
+  const r = await api(`/admin/reservations/${reservationId}/validation`, { method: "PATCH", body: JSON.stringify({ decision }) });
   refreshAdmin();
   return { ok: r.ok, message: r.ok ? undefined : r.message };
 }

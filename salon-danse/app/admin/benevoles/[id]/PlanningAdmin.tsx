@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { adminAssignAction, adminRemoveReservationAction, adminUnlockAndRemoveAction } from "../../../services/actions";
 import { formatJour } from "../../../services/config";
 import type { Creneau, Reservation } from "../../../services/types";
+import ValidationBadge from "../../../_components/ValidationBadge";
+import DecisionButtons from "../../validations/DecisionButtons";
 
 export default function PlanningAdmin({ userId, reservations, creneaux, locked }: { userId: number; reservations: Reservation[]; creneaux: Creneau[]; locked: boolean }) {
   const [pending, start] = useTransition();
@@ -28,8 +30,9 @@ export default function PlanningAdmin({ userId, reservations, creneaux, locked }
             const f = formatJour(r.creneau.jour);
             return (
               <li key={r.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#7A291E]/10 p-3">
-                <span className="text-sm"><b className="font-['Montserrat']">{r.creneau.mission}</b>{r.creneau.sensible && <span className="ml-2 rounded-full bg-[#3E150F] px-2 py-0.5 text-[10px] text-white">Sensible</span>}<br />{f.long} · {r.creneau.debut}–{r.creneau.fin}</span>
+                <span className="text-sm"><b className="font-['Montserrat']">{r.creneau.mission}</b>{r.creneau.sensible && <span className="ml-2 rounded-full bg-[#3E150F] px-2 py-0.5 text-[10px] text-white">Sensible</span>}{r.validation && <span className="ml-2"><ValidationBadge v={r.validation} /></span>}<br />{f.long} · {r.creneau.debut}–{r.creneau.fin}</span>
                 <span className="flex flex-col items-end gap-1">
+                  {r.validation === "en_attente" && <DecisionButtons reservationId={r.id} />}
                   <button
                     type="button"
                     disabled={pending}

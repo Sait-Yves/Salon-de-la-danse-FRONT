@@ -58,16 +58,25 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
     setBusy(id);
     setMsg(null);
     startTransition(async () => {
-      const r = await fn();
-      setBusy(null);
-      setMsg(r.ok ? (success ? { kind: "ok", text: success } : null) : { kind: "error", text: r.message ?? "Une erreur est survenue." });
+      // Si l'appel échoue (serveur lent, coupure réseau), on débloque quand même le planning.
+      try {
+        const r = await fn();
+        const okText = success ?? r.message;
+        setMsg(r.ok ? (okText ? { kind: "ok", text: okText } : null) : { kind: "error", text: r.message ?? "Une erreur est survenue." });
+      } catch {
+        setMsg({ kind: "error", text: "Le serveur n'a pas répondu. Rechargez la page et réessayez." });
+      } finally {
+        setBusy(null);
+      }
     });
   }
 
   function toggle(c: Creneau) {
     if (busy !== null) return;
-    if (locked) return setMsg({ kind: "error", text: "Planning validé : seul un administrateur peut le modifier." });
     const mine = byCreneau.get(c.id);
+    // Une demande en attente peut être annulée même après validation du planning.
+    if (locked && mine?.validation === "en_attente") return run(c.id, () => cancelReservationAction(mine.id), "Demande annulée. Votre planning repasse en brouillon.");
+    if (locked) return setMsg({ kind: "error", text: "Planning validé : seul un administrateur peut le modifier." });
     if (mine) return run(c.id, () => cancelReservationAction(mine.id));
     if (c.restantes === 0) return setMsg({ kind: "error", text: "Ce créneau est complet." });
     const why = conflict(selected, c);
@@ -76,6 +85,7 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
   }
 
   const count = selected.length;
+  const enAttente = reservations.filter((r) => r.validation === "en_attente").length;
 
   return (
     <div className="mx-auto max-w-4xl p-4 pb-40 md:p-8 md:pb-40">
@@ -116,11 +126,13 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
             <h2 className="mb-2 font-['Montserrat'] text-sm font-extrabold text-[#7A291E]">{horaire.replace("–", " – ")}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               {list.map((c) => {
-                const mine = byCreneau.has(c.id);
+                const res = byCreneau.get(c.id);
+                const mine = !!res;
+                const attente = res?.validation === "en_attente";
                 const full = c.restantes === 0;
                 const blocked = !mine && !full && !locked && !!conflict(selected, c);
                 const t = gaugeTone(c.restantes, c.capacite);
-                const disabled = (full && !mine) || (locked && !mine);
+                const disabled = (full && !mine) || (locked && !mine) || (locked && mine && !attente);
                 return (
                   <button
                     key={c.id}
@@ -134,10 +146,11 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate font-['Montserrat'] text-sm font-bold text-[#333]">{c.mission}</p>
+                        {c.sensible && <p className="mt-0.5 text-[11px] font-semibold text-[#7A291E]">Sur validation d&apos;un admin</p>}
                         <p className="text-xs">{c.debut} – {c.fin}</p>
                       </div>
-                      <span className={`shrink-0 rounded-full border px-3 py-1 font-['Montserrat'] text-[11px] font-bold ${mine ? "border-[#7A291E] bg-[#7A291E] text-white" : full ? "border-gray-300 text-gray-500" : blocked ? "border-gray-300 text-gray-500" : "border-[#7A291E]/30 text-[#7A291E]"}`}>
-                        {busy === c.id ? "…" : mine ? (locked ? "Validé" : "Choisi ✓") : full ? "Complet" : blocked ? "Incompatible" : "Choisir"}
+                      <span className={`shrink-0 rounded-full border px-3 py-1 font-['Montserrat'] text-[11px] font-bold ${attente ? "border-[#A65A00] bg-[#FFF4E5] text-[#A65A00]" : mine ? "border-[#7A291E] bg-[#7A291E] text-white" : full ? "border-gray-300 text-gray-500" : blocked ? "border-gray-300 text-gray-500" : "border-[#7A291E]/30 text-[#7A291E]"}`}>
+                        {busy === c.id ? "…" : attente ? "En attente" : res?.validation === "acceptee" ? "Accepté ✓" : mine ? (locked ? "Validé" : "Choisi ✓") : full ? "Complet" : blocked ? "Incompatible" : "Choisir"}
                       </span>
                     </div>
                     <div className="mt-3"><PlacesPill restantes={c.restantes} capacite={c.capacite} /></div>
@@ -163,7 +176,7 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
           <div className="min-w-0">
             <p className="font-['Montserrat'] text-sm font-extrabold text-[#333]">{count} / {SALON.quotaMax} créneau{count > 1 ? "x" : ""}</p>
             <p className="truncate text-xs">
-              {count === 0 ? "Aucun créneau choisi" : selected.map((s) => `${formatJour(s.jour).court} ${s.debut}`).join(" · ")}
+              {count === 0 ? "Aucun créneau choisi" : selected.map((s) => `${formatJour(s.jour).court} ${s.debut}${byCreneau.get(s.id)?.validation === "en_attente" ? " (en attente)" : ""}`).join(" · ")}
             </p>
           </div>
           {locked ? (
@@ -181,6 +194,7 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
           <div className="animate-fade-up w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <h2 id="confirm-title" className="font-['Montserrat'] text-lg font-extrabold text-[#333]">Valider définitivement ?</h2>
             <p className="mt-2 text-sm">Après validation, seul un administrateur pourra modifier votre planning ({count} créneau{count > 1 ? "x" : ""}).</p>
+            {enAttente > 0 && <p className="mt-2 text-sm">{enAttente > 1 ? `${enAttente} demandes restent` : "1 demande reste"} en attente de validation par un administrateur. Vous pourrez l&apos;annuler tant qu&apos;elle n&apos;est pas acceptée.</p>}
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setConfirm(false)} className="btn-pill btn-pill-ghost text-sm">Annuler</button>
               <button

@@ -2,9 +2,10 @@ import Link from "next/link";
 import { fetchAllCreneaux, fetchInscrits } from "../../../services/loaders";
 import { formatJour } from "../../../services/config";
 import { PlacesPill } from "../../../_components/Gauge";
-import StatusBadge from "../../../_components/StatusBadge";
 import ErrorCard from "../../../_components/ErrorCard";
 import RemoveInscrit from "./RemoveInscrit";
+import { EtatReservation } from "../../../_components/ValidationBadge";
+import DecisionButtons from "../../validations/DecisionButtons";
 
 export default async function CreneauPage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
@@ -41,7 +42,7 @@ export default async function CreneauPage({ params }: { params: Promise<{ id: st
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase text-[#3E150F]/70">
-                <tr><th className="py-2">Nom</th><th className="hidden md:table-cell">E-mail</th><th className="hidden sm:table-cell">Téléphone</th><th>Planning</th><th className="text-right">Action</th></tr>
+                <tr><th className="py-2">Nom</th><th className="hidden md:table-cell">E-mail</th><th className="hidden sm:table-cell">Téléphone</th><th>État</th><th className="text-right">Action</th></tr>
               </thead>
               <tbody>
                 {inscrits.map((i) => (
@@ -52,8 +53,8 @@ export default async function CreneauPage({ params }: { params: Promise<{ id: st
                     </td>
                     <td className="hidden md:table-cell">{i.user.email}</td>
                     <td className="hidden sm:table-cell whitespace-nowrap">{i.user.telephone}</td>
-                    <td><StatusBadge statut={i.user.statutPlanning === "valide" || i.statut === "valide" ? "valide" : "brouillon"} /></td>
-                    <td className="text-right"><RemoveInscrit userId={i.user.id} reservationId={i.reservationId} locked={i.user.statutPlanning === "valide" || i.statut === "valide"} /></td>
+                    <td><EtatReservation v={i.validation} statut={i.user.statutPlanning === "valide" || i.statut === "valide" ? "valide" : "brouillon"} /></td>
+                    <td className="text-right"><span className="inline-flex flex-wrap items-start justify-end gap-2">{i.validation === "en_attente" && <DecisionButtons reservationId={i.reservationId} />}<RemoveInscrit userId={i.user.id} reservationId={i.reservationId} locked={i.user.statutPlanning === "valide" || i.statut === "valide"} /></span></td>
                   </tr>
                 ))}
               </tbody>

@@ -8,6 +8,7 @@ const REGLES = [
   { t: "Pas de chevauchement", d: "Deux missions ne peuvent pas se tenir en même temps." },
   { t: "Une pause obligatoire", d: "Trois créneaux d'affilée sont interdits." },
   { t: "Places limitées", d: "Chaque créneau affiche ses places restantes. Vert : places disponibles. Orange : presque complet. Gris : complet." },
+  { t: "Missions sensibles", d: "Certaines missions (billetterie, caisse…) sont soumises à la validation d'un administrateur. Votre demande reste en attente jusqu'à sa réponse, envoyée par e-mail." },
   { t: "Validation définitive", d: "Tant que vous n'avez pas validé, votre planning reste modifiable. Ensuite, seul un administrateur peut le changer." },
 ];
 

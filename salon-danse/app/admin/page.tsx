@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchAllPlannings, fetchStats, fetchUserPlanning, fetchUsers, getMe, type UserFilters } from "../services/loaders";
+import { fetchAllPlannings, fetchDemandes, fetchStats, fetchUserPlanning, fetchUsers, getMe, type UserFilters } from "../services/loaders";
 import { formatJour } from "../services/config";
 import Gauge from "../_components/Gauge";
 import StatusBadge from "../_components/StatusBadge";
@@ -27,6 +27,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const [stats, users, admins, me, grouped] = await Promise.all([
     fetchStats(), fetchUsers(filters), fetchUsers({ role: "admin", perPage: 50 }), getMe(), fetchAllPlannings("benevole"),
   ]);
+  const demandes = await fetchDemandes("en_attente");
+  const nbDemandes = demandes.ok ? demandes.data.total : 0;
   // Créneaux choisis par chaque bénévole : un seul appel groupé (GET /admin/plannings).
   // Si la route échoue, on revient à un appel par bénévole affiché.
   const plannings = new Map<number, Awaited<ReturnType<typeof fetchUserPlanning>>>();
@@ -47,6 +49,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <h1 className="font-['Montserrat'] text-2xl font-black">Vue d&apos;ensemble</h1>
         <p className="text-sm text-white/75">Suivi des bénévoles et du remplissage des créneaux.</p>
       </div>
+
+      {nbDemandes > 0 && (
+        <Link href="/admin/validations" className="official-card flex items-center justify-between gap-4 border-[#A65A00]/30 bg-[#FFF4E5] p-4 transition hover:border-[#A65A00]">
+          <span className="text-sm font-semibold text-[#3E150F]"><b className="font-['Montserrat'] text-lg text-[#A65A00]">{nbDemandes}</b> demande{nbDemandes > 1 ? "s" : ""} sur mission sensible à valider</span>
+          <span className="text-sm font-bold text-[#A65A00]">Traiter →</span>
+        </Link>
+      )}
 
       {stats.ok ? (
         <section className="grid grid-cols-2 gap-4 md:grid-cols-5" aria-label="Chiffres clés">
@@ -117,6 +126,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                       <td className="py-3 pr-2">
                         <Link href={`/admin/benevoles/${u.id}`} className="font-semibold text-[#7A291E] underline-offset-2 hover:underline">{u.prenom} {u.nom}</Link>
                         {u.isMineur && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Mineur</span>}
+                        {u.demandesEnAttente > 0 && <span className="ml-2 rounded-full border border-[#A65A00]/40 bg-[#FFF4E5] px-2 py-0.5 text-[10px] font-bold text-[#A65A00]">{u.demandesEnAttente} en attente</span>}
                       </td>
                       <td className="hidden md:table-cell">{u.email}</td>
                       <td className="py-3 pr-3">

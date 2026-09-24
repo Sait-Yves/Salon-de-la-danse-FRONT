@@ -6,6 +6,7 @@ import ErrorCard from "../../../_components/ErrorCard";
 import RemoveInscrit from "./RemoveInscrit";
 import { EtatReservation } from "../../../_components/ValidationBadge";
 import DecisionButtons from "../../validations/DecisionButtons";
+import AutoRefresh from "../../../_components/AutoRefresh";
 
 export default async function CreneauPage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
@@ -17,6 +18,7 @@ export default async function CreneauPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
+      <AutoRefresh seconds={30} />
       <Link href="/admin/creneaux" className="text-sm font-semibold text-[#7A291E] underline">← Missions et créneaux</Link>
       <div className="banner-gradient animate-rise flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>

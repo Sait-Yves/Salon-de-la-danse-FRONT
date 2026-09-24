@@ -3,6 +3,7 @@ import { fetchPlanning, getMe } from "../../services/loaders";
 import { formatJour } from "../../services/config";
 import StatusBadge from "../../_components/StatusBadge";
 import ErrorCard from "../../_components/ErrorCard";
+import AutoRefresh from "../../_components/AutoRefresh";
 
 export default async function ProfilePage() {
   const user = (await getMe())!;
@@ -14,6 +15,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-5 pb-20 md:p-8">
+      <AutoRefresh seconds={30} />
       <div className="banner-gradient animate-rise flex items-center gap-5">
         {user.hasPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element

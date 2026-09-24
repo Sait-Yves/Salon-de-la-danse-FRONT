@@ -5,6 +5,7 @@ import { PlacesPill } from "../../_components/Gauge";
 import StatusBadge from "../../_components/StatusBadge";
 import ErrorCard from "../../_components/ErrorCard";
 import DecisionButtons from "./DecisionButtons";
+import AutoRefresh from "../../_components/AutoRefresh";
 
 const quand = (iso: string) => {
   const d = new Date(iso);
@@ -19,6 +20,7 @@ export default async function ValidationsPage({ searchParams }: { searchParams: 
 
   return (
     <>
+      <AutoRefresh seconds={20} />
       <div className="banner-gradient animate-rise">
         <h1 className="font-['Montserrat'] text-2xl font-black">Demandes sur missions sensibles</h1>
         <p className="text-sm text-white/75">Accepter confirme la place. Refuser la libère, et le planning du bénévole repasse en brouillon.</p>

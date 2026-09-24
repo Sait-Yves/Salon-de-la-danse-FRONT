@@ -24,7 +24,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     mineur: sp.mineur === "1" ? true : undefined,
     page: Math.max(1, Number(sp.page) || 1),
   };
-  const [stats, users] = await Promise.all([fetchStats(), fetchUsers(filters)]);
+  const [stats, users, admins] = await Promise.all([fetchStats(), fetchUsers(filters), fetchUsers({ role: "admin", perPage: 50 })]);
   // Créneaux choisis par chaque bénévole de la page (un appel par bénévole, en parallèle).
   const plannings = new Map<number, Awaited<ReturnType<typeof fetchUserPlanning>>>();
   if (users.ok) {
@@ -147,6 +147,18 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           </>
         )}
       </section>
+
+      {admins.ok && admins.data.items.length > 0 && (
+        <section className="official-card p-6">
+          <h2 className="mb-1 font-['Montserrat'] text-lg font-extrabold">Administrateurs</h2>
+          <p className="mb-4 text-sm text-[#3E150F]/70">Pour donner les droits admin à un bénévole, ouvrez sa fiche.</p>
+          <ul className="flex flex-wrap gap-2">
+            {admins.data.items.map((a) => (
+              <li key={a.id}><Link href={`/admin/benevoles/${a.id}`} className="btn-pill btn-pill-ghost text-xs !px-4 !py-2">{a.prenom} {a.nom}</Link></li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

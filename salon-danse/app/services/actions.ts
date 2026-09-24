@@ -5,7 +5,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { api } from "./api";
-import { toInvitation } from "./adapters";
 import { TOKEN_COOKIE } from "./config";
 import type { ActionResult, FormState } from "./types";
 
@@ -133,6 +132,12 @@ export async function adminRemoveReservationAction(reservationId: number): Promi
   return { ok: r.ok, message: r.ok ? undefined : r.message };
 }
 
+export async function adminSetRoleAction(userId: number, role: "admin" | "benevole"): Promise<ActionResult> {
+  const r = await api(`/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
 export async function adminUpdateUserAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const id = field(fd, "id");
   const body = new FormData();
@@ -148,19 +153,10 @@ export async function adminUpdateUserAction(_prev: FormState, fd: FormData): Pro
   return { ok: true, message: "Informations enregistrées." };
 }
 
-export async function createCodesAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const nombre = Number(field(fd, "nombre"));
-  if (!Number.isInteger(nombre) || nombre < 1 || nombre > 200) return { error: "Entrez un nombre entre 1 et 200." };
-  const r = await api("/admin/invitation-codes", { method: "POST", body: JSON.stringify({ nombre }) });
-  if (!r.ok) return { error: r.message };
-  const codes = (Array.isArray(r.json?.data) ? r.json.data : []).map(toInvitation);
-  return { ok: true, codes, message: `${codes.length} code(s) généré(s).` };
-}
-
 export async function sendInvitationAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const email = field(fd, "email");
   if (!email) return { error: "Entrez une adresse e-mail." };
   const r = await api("/admin/invitations", { method: "POST", body: JSON.stringify({ email }) });
-  if (!r.ok) return { error: r.status === 503 ? "L'envoi d'e-mails n'est pas configuré sur le serveur. Générez des codes à la place." : r.message };
+  if (!r.ok) return { error: r.status === 503 ? "L'envoi d'e-mails n'est pas configuré sur le serveur. Contactez l'équipe technique." : r.message };
   return { ok: true, message: `Invitation envoyée à ${email}.` };
 }

@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { fetchAllCreneaux, fetchUserPlanning, findUser } from "../../../services/loaders";
+import { fetchAllCreneaux, fetchUserPlanning, findUser, getMe } from "../../../services/loaders";
 import StatusBadge from "../../../_components/StatusBadge";
 import ErrorCard from "../../../_components/ErrorCard";
 import StatusToggle from "../../StatusToggle";
 import UserEditForm from "./UserEditForm";
 import PlanningAdmin from "./PlanningAdmin";
+import RoleToggle from "./RoleToggle";
 
 export default async function BenevolePage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
@@ -12,7 +13,7 @@ export default async function BenevolePage({ params }: { params: Promise<{ id: s
   if (!user.ok) return <ErrorCard message={user.error} status={user.status} />;
   if (!user.data) return <ErrorCard title="Bénévole introuvable" message="Ce compte n'existe pas." />;
   const u = user.data;
-  const [planning, creneaux] = await Promise.all([fetchUserPlanning(id), fetchAllCreneaux(true)]);
+  const [planning, creneaux, me] = await Promise.all([fetchUserPlanning(id), fetchAllCreneaux(true), getMe()]);
 
   return (
     <>
@@ -25,9 +26,9 @@ export default async function BenevolePage({ params }: { params: Promise<{ id: s
           <div className="flex h-[84px] w-[84px] items-center justify-center rounded-2xl bg-white/15 font-['Montserrat'] text-2xl font-black" aria-hidden>{u.prenom[0]}{u.nom[0]}</div>
         )}
         <div>
-          <h1 className="font-['Montserrat'] text-2xl font-black">{u.prenom} {u.nom}</h1>
+          <h1 className="font-['Montserrat'] text-2xl font-black">{u.prenom} {u.nom}{u.role === "admin" && <span className="ml-3 rounded-full bg-white px-2 py-0.5 align-middle text-[11px] font-bold text-[#7A291E]">Admin</span>}</h1>
           <p className="text-sm text-white/75">{u.email} · {u.telephone}</p>
-          <div className="mt-2 flex items-center gap-3"><StatusBadge statut={u.statutPlanning} /><span className="rounded-full bg-white px-1"><StatusToggle userId={u.id} statut={u.statutPlanning} /></span></div>
+          <div className="mt-2 flex flex-wrap items-center gap-3"><StatusBadge statut={u.statutPlanning} /><span className="rounded-full bg-white px-1"><StatusToggle userId={u.id} statut={u.statutPlanning} /></span>{me?.id !== u.id && <span className="rounded-full bg-white px-1"><RoleToggle userId={u.id} role={u.role} /></span>}</div>
         </div>
       </div>
       <div className="grid gap-8 lg:grid-cols-2">

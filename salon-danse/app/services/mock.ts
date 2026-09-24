@@ -65,7 +65,7 @@ function seed(): State {
     });
   }
   const res: MRes[] = [];
-  let nextRes = 1;
+  const nextRes = 1;
   const state: State = { users, missions, creneaux, res, codes: [{ id: 1, code: "DANSE2027", isActive: true }, { id: 2, code: "YJYJPYWL", isActive: true }, { id: 3, code: "YE6W9W3X", isActive: true }, { id: 4, code: "YSVZQLTG", isActive: true }, { id: 5, code: "C7BKFZSX", isActive: true }, { id: 6, code: "Q22YT7N9", isActive: true }, { id: 7, code: "DSQ5G5DV", isActive: true }, { id: 8, code: "8VG2ZT5P", isActive: true }, { id: 9, code: "65Q2TMD8", isActive: true }, { id: 10, code: "FXPYBQPE", isActive: true }, { id: 11, code: "RE8ZTTXL", isActive: true }], nextRes, nextUser: 41, nextCode: 12 };
   for (const u of users.filter((x) => x.role === "benevole" && x.id > 2)) {
     const want = 1 + (u.id % 3);
@@ -225,6 +225,15 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     for (const f of ["nom", "prenom", "email", "telephone"] as const) if (body[f] !== undefined) (u as any)[f] = body[f];
     if (body.isMineur !== undefined) u.isMineur = body.isMineur === "1" || body.isMineur === true;
     if (body.photo) u.photo = true;
+    return json(200, { data: uJson(u, true) });
+  }
+  if (method === "PATCH" && (m = p.match(/^\/admin\/users\/(\d+)\/role$/))) {
+    const u = s.users.find((x) => x.id === Number(m![1]));
+    if (!u) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (body.role !== "admin" && body.role !== "benevole") throw invalid("role", "Le rôle doit être admin ou benevole.");
+    if (body.role === "benevole" && u.id === me!.id) throw biz("Vous ne pouvez pas retirer vos propres droits d'administrateur.");
+    if (body.role === "benevole" && u.role === "admin" && s.users.filter((x) => x.role === "admin").length === 1) throw biz("Impossible de rétrograder le dernier administrateur.");
+    u.role = body.role;
     return json(200, { data: uJson(u, true) });
   }
   if (method === "GET" && (m = p.match(/^\/admin\/users\/(\d+)\/planning$/))) {

@@ -58,10 +58,16 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
     setBusy(id);
     setMsg(null);
     startTransition(async () => {
-      const r = await fn();
-      setBusy(null);
-      const okText = success ?? r.message;
-      setMsg(r.ok ? (okText ? { kind: "ok", text: okText } : null) : { kind: "error", text: r.message ?? "Une erreur est survenue." });
+      // Si l'appel échoue (serveur lent, coupure réseau), on débloque quand même le planning.
+      try {
+        const r = await fn();
+        const okText = success ?? r.message;
+        setMsg(r.ok ? (okText ? { kind: "ok", text: okText } : null) : { kind: "error", text: r.message ?? "Une erreur est survenue." });
+      } catch {
+        setMsg({ kind: "error", text: "Le serveur n'a pas répondu. Rechargez la page et réessayez." });
+      } finally {
+        setBusy(null);
+      }
     });
   }
 

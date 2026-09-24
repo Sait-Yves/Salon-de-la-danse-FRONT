@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
-import Gauge, { gaugeTone } from "../../_components/Gauge";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { PlacesPill, gaugeTone } from "../../_components/Gauge";
 import { formatJour, SALON } from "../../services/config";
 import { cancelReservationAction, reserveAction, validatePlanningAction } from "../../services/actions";
 import type { Creneau, Reservation } from "../../services/types";
@@ -30,6 +30,13 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
   const [busy, setBusy] = useState<number | "validate" | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [, startTransition] = useTransition();
+
+  // Les messages disparaissent seuls après 5 secondes.
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(null), 5000);
+    return () => clearTimeout(t);
+  }, [msg]);
 
   const byCreneau = useMemo(() => new Map(reservations.map((r) => [r.creneau.id, r])), [reservations]);
   const selected = useMemo(
@@ -101,11 +108,6 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
         </select>
       </div>
 
-      <div aria-live="polite" className="min-h-[2.75rem]">
-        {msg && (
-          <p role={msg.kind === "error" ? "alert" : "status"} className={`mb-3 animate-fade-in rounded-xl border px-4 py-2.5 text-sm ${msg.kind === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{msg.text}</p>
-        )}
-      </div>
 
       <div className="space-y-6">
         {groups.length === 0 && <p className="rounded-2xl bg-[#7A291E]/5 p-6 text-center text-sm">Aucun créneau pour ce filtre.</p>}
@@ -138,7 +140,7 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
                         {busy === c.id ? "…" : mine ? (locked ? "Validé" : "Choisi ✓") : full ? "Complet" : blocked ? "Incompatible" : "Choisir"}
                       </span>
                     </div>
-                    <div className="mt-3"><Gauge restantes={c.restantes} capacite={c.capacite} /></div>
+                    <div className="mt-3"><PlacesPill restantes={c.restantes} capacite={c.capacite} /></div>
                     <span className="sr-only">{t.label}</span>
                   </button>
                 );
@@ -146,6 +148,13 @@ export default function PlanningBoard({ creneaux, reservations, locked }: { cren
             </div>
           </section>
         ))}
+      </div>
+
+      {/* Message au-dessus de la barre du bas, visible même en bas de page */}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-3 bottom-[5.5rem] z-40 mx-auto max-w-3xl">
+        {msg && (
+          <p role={msg.kind === "error" ? "alert" : "status"} className={`pointer-events-auto animate-fade-up rounded-2xl border px-4 py-3 text-sm font-semibold shadow-lg ${msg.kind === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{msg.text}</p>
+        )}
       </div>
 
       {/* Barre fixe de validation */}

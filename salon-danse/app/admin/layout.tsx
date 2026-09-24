@@ -5,5 +5,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await getMe();
   if (!user) redirect("/login?mode=password&expired=1");
   if (user.role !== "admin") redirect("/dashboard");
-  return <div className="mx-auto max-w-6xl space-y-8 p-5 pb-20 md:p-8">{children}</div>;
+  return <div className="mx-auto w-full min-w-0 max-w-6xl space-y-8 p-5 pb-20 md:p-8">{children}</div>;
 }

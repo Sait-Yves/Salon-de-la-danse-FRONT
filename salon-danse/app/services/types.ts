@@ -37,6 +37,41 @@ export interface Reservation {
   creneau: Creneau;
 }
 
+export interface Edition {
+  id: number;
+  nom: string;
+  debut: string; // AAAA-MM-JJ
+  fin: string;
+  active: boolean;
+  archived: boolean;
+}
+
+export interface Mission {
+  id: number;
+  editionId: number | null;
+  nom: string;
+  sensible: boolean;
+}
+
+// Une personne inscrite sur un créneau (GET /admin/creneaux/{id}/inscrits).
+export interface Inscrit {
+  reservationId: number;
+  statut: StatutPlanning;
+  user: User;
+}
+
+export interface CreneauInscrits {
+  creneau: Creneau | null;
+  restantes: number | null;
+  inscrits: Inscrit[];
+}
+
+// Un utilisateur et ses réservations (GET /admin/plannings).
+export interface PlanningRow {
+  user: User;
+  reservations: Reservation[];
+}
+
 export interface Page<T> {
   items: T[];
   total: number;

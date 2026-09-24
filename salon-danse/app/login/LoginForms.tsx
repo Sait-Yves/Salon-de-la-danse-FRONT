@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginAction } from "../services/actions";
 import { Alert, Field, SubmitButton } from "../_components/ui";
 import type { FormState } from "../services/types";
 
-export default function LoginForms({ initialMode, expired }: { initialMode: "code" | "password"; expired: boolean }) {
+export default function LoginForms({ initialMode, expired, reset }: { initialMode: "code" | "password"; expired: boolean; reset?: boolean }) {
   const [mode, setMode] = useState(initialMode);
   const router = useRouter();
   const [state, formAction] = useActionState<FormState, FormData>(loginAction, {});
@@ -36,7 +37,8 @@ export default function LoginForms({ initialMode, expired }: { initialMode: "cod
         ))}
       </div>
 
-      {expired && mode === "password" && <div className="mb-4"><Alert kind="warn">Votre session a expiré. Reconnectez-vous.</Alert></div>}
+      {expired && mode === "password" && !reset && <div className="mb-4"><Alert kind="warn">Votre session a expiré. Reconnectez-vous.</Alert></div>}
+      {reset && mode === "password" && <div className="mb-4"><Alert kind="ok">Mot de passe modifié. Connectez-vous avec le nouveau.</Alert></div>}
 
       {mode === "code" ? (
         <form onSubmit={goRegister} className="space-y-4">
@@ -51,7 +53,7 @@ export default function LoginForms({ initialMode, expired }: { initialMode: "cod
           <Field label="Mot de passe" name="password" type="password" required autoComplete="current-password" />
           {state.error && <Alert>{state.error}</Alert>}
           <SubmitButton pending="Connexion…">Se connecter</SubmitButton>
-          <p className="text-center text-xs">Mot de passe oublié ? Contactez l&apos;équipe du Salon.</p>
+          <p className="text-center text-xs"><Link href="/mot-de-passe-oublie" className="font-semibold text-[#7A291E] underline underline-offset-2">Mot de passe oublié ?</Link></p>
         </form>
       )}
     </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchStats, fetchUserPlanning, fetchUsers, getMe, type UserFilters } from "../services/loaders";
+import { fetchAllPlannings, fetchStats, fetchUserPlanning, fetchUsers, getMe, type UserFilters } from "../services/loaders";
 import { formatJour } from "../services/config";
 import Gauge from "../_components/Gauge";
 import StatusBadge from "../_components/StatusBadge";
@@ -24,12 +24,19 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     mineur: sp.mineur === "1" ? true : undefined,
     page: Math.max(1, Number(sp.page) || 1),
   };
-  const [stats, users, admins, me] = await Promise.all([fetchStats(), fetchUsers(filters), fetchUsers({ role: "admin", perPage: 50 }), getMe()]);
-  // Créneaux choisis par chaque bénévole de la page (un appel par bénévole, en parallèle).
+  const [stats, users, admins, me, grouped] = await Promise.all([
+    fetchStats(), fetchUsers(filters), fetchUsers({ role: "admin", perPage: 50 }), getMe(), fetchAllPlannings("benevole"),
+  ]);
+  // Créneaux choisis par chaque bénévole : un seul appel groupé (GET /admin/plannings).
+  // Si la route échoue, on revient à un appel par bénévole affiché.
   const plannings = new Map<number, Awaited<ReturnType<typeof fetchUserPlanning>>>();
   if (users.ok) {
-    const all = await Promise.all(users.data.items.map((u) => fetchUserPlanning(u.id)));
-    users.data.items.forEach((u, i) => plannings.set(u.id, all[i]));
+    if (grouped.ok) {
+      users.data.items.forEach((u) => plannings.set(u.id, { ok: true, data: grouped.data.get(u.id) ?? [] }));
+    } else {
+      const all = await Promise.all(users.data.items.map((u) => fetchUserPlanning(u.id)));
+      users.data.items.forEach((u, i) => plannings.set(u.id, all[i]));
+    }
   }
   const taux = stats.ok && stats.data.capacite > 0 ? Math.round((stats.data.occupees / stats.data.capacite) * 100) : 0;
   const exportQs = qs({ q: sp.q, statut: sp.statut, mineur: sp.mineur }, {});
@@ -115,8 +122,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                       <td className="py-3 pr-3">
                         {(() => {
                           const pl = plannings.get(u.id);
-                          if (!pl || !pl.ok) return <span className="text-xs text-[#3E150F]/50">Indisponible</span>;
-                          if (pl.data.length === 0) return <span className="text-xs text-[#3E150F]/50">Aucun créneau</span>;
+                          if (!pl || !pl.ok) return <span className="text-xs text-[#3E150F]/70">Indisponible</span>;
+                          if (pl.data.length === 0) return <span className="text-xs text-[#3E150F]/70">Aucun créneau</span>;
                           const list = [...pl.data].sort((a, b) => a.creneau.jour.localeCompare(b.creneau.jour) || a.creneau.debut.localeCompare(b.creneau.debut));
                           return (
                             <div>
@@ -150,7 +157,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
       {admins.ok && admins.data.items.length > 0 && (
         <section className="official-card p-6">
-          <h2 className="font-['Montserrat'] text-lg font-extrabold">Administrateurs <span className="text-[#3E150F]/50">· {admins.data.total}</span></h2>
+          <h2 className="font-['Montserrat'] text-lg font-extrabold">Administrateurs <span className="text-[#3E150F]/70">· {admins.data.total}</span></h2>
           <p className="mb-4 text-sm text-[#3E150F]/70">Comptes qui ont accès à cet espace. Pour en ajouter un : fiche du bénévole → « Passer admin ».</p>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

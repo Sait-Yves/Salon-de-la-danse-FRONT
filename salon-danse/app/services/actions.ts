@@ -72,6 +72,37 @@ export async function registerAction(_prev: FormState, fd: FormData): Promise<Fo
   redirect("/dashboard");
 }
 
+// Mot de passe oublié, étape 1 : le back envoie un code par e-mail.
+export async function forgotPasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = field(fd, "email");
+  if (!email) return { fieldErrors: { email: "Entrez votre adresse e-mail." } };
+  const r = await api("/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+  // 422 sur l'e-mail = format invalide. Pour le reste, on ne dit pas si le compte existe.
+  if (!r.ok && r.status !== 404) return Object.keys(r.fieldErrors).length ? { fieldErrors: r.fieldErrors } : { error: r.message };
+  return { ok: true, message: email };
+}
+
+// Étape 2 : code reçu + nouveau mot de passe. Le back déconnecte toutes les sessions du compte.
+export async function resetPasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = field(fd, "email");
+  const token = field(fd, "token");
+  const password = String(fd.get("password") ?? "");
+  const confirmation = String(fd.get("password_confirmation") ?? "");
+  const errors: Record<string, string> = {};
+  if (!email) errors.email = "Entrez votre adresse e-mail.";
+  if (!token) errors.token = "Entrez le code reçu par e-mail.";
+  if (password.length < 8) errors.password = "8 caractères minimum.";
+  else if (password !== confirmation) errors.password_confirmation = "Les mots de passe ne correspondent pas.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+  const r = await api("/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ email, token, password, password_confirmation: confirmation }),
+  });
+  if (!r.ok) return Object.keys(r.fieldErrors).length ? { fieldErrors: r.fieldErrors } : { error: r.message };
+  (await cookies()).delete(TOKEN_COOKIE);
+  redirect("/login?mode=password&reset=1");
+}
+
 export async function logoutAction() {
   await api("/logout", { method: "POST" });
   (await cookies()).delete(TOKEN_COOKIE);
@@ -169,4 +200,112 @@ export async function sendInvitationAction(_prev: FormState, fd: FormData): Prom
   const r = await api("/admin/invitations", { method: "POST", body: JSON.stringify({ email }) });
   if (!r.ok) return { error: r.status === 503 ? "L'envoi d'e-mails n'est pas configuré sur le serveur. Contactez l'équipe technique." : r.message };
   return { ok: true, message: `Invitation envoyée à ${email}.` };
+}
+
+/* ------------------------- Admin : missions et créneaux ------------------------ */
+// Routes CRUD de Louis (voir docs/routes-admin-editions-missions-creneaux.md).
+
+export async function adminSaveEditionAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const nom = field(fd, "nom");
+  const debut = field(fd, "date_debut");
+  const fin = field(fd, "date_fin");
+  const errors: Record<string, string> = {};
+  if (!nom) errors.nom = "Donnez un nom à l'édition.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(debut)) errors.date_debut = "Date invalide.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fin)) errors.date_fin = "Date invalide.";
+  else if (debut && fin < debut) errors.date_fin = "Doit être après le début.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+  const payload: Record<string, unknown> = { nom, date_debut: debut, date_fin: fin };
+  if (!id) payload.isActive = fd.get("isActive") === "1";
+  const r = id
+    ? await api(`/admin/editions/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
+    : await api("/admin/editions", { method: "POST", body: JSON.stringify(payload) });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Édition modifiée." : `Édition « ${nom} » créée.` };
+}
+
+// Activer une édition désactive automatiquement les autres (règle du back).
+export async function adminActivateEditionAction(editionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/editions/${editionId}`, { method: "PATCH", body: JSON.stringify({ isActive: true }) });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+// Archiver une édition, ou la restaurer (et l'activer).
+export async function adminArchiveEditionAction(editionId: number, archive: boolean): Promise<ActionResult> {
+  const body = archive ? { isArchived: true } : { isArchived: false, isActive: true };
+  const r = await api(`/admin/editions/${editionId}`, { method: "PATCH", body: JSON.stringify(body) });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+export async function adminDeleteEditionAction(editionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/editions/${editionId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+const HHMM = /^\d{2}:\d{2}$/;
+
+export async function adminSaveMissionAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const nom = field(fd, "nom");
+  if (!nom) return { fieldErrors: { nom: "Donnez un nom à la mission." } };
+  const editionId = Number(field(fd, "edition_id")) || undefined;
+  const body = JSON.stringify({ nom, isSensible: fd.get("isSensible") === "1", ...(id ? {} : { edition_id: editionId }) });
+  const r = id
+    ? await api(`/admin/missions/${id}`, { method: "PATCH", body })
+    : await api("/admin/missions", { method: "POST", body });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Mission modifiée." : `Mission « ${nom} » créée.` };
+}
+
+export async function adminDeleteMissionAction(missionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/missions/${missionId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+export async function adminSaveCreneauAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const jour = field(fd, "jour");
+  const debut = field(fd, "heure_debut");
+  const fin = field(fd, "heure_fin");
+  const capacite = Number(field(fd, "capacite_max"));
+  const errors: Record<string, string> = {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(jour)) errors.jour = "Choisissez un jour.";
+  if (!HHMM.test(debut)) errors.heure_debut = "Heure invalide.";
+  if (!HHMM.test(fin)) errors.heure_fin = "Heure invalide.";
+  else if (HHMM.test(debut) && fin <= debut) errors.heure_fin = "Doit être après le début.";
+  if (!Number.isInteger(capacite) || capacite < 1) errors.capacite_max = "1 place minimum.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+
+  const payload = { jour, heure_debut: debut, heure_fin: fin, capacite_max: capacite };
+  const r = id
+    ? await api(`/admin/creneaux/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
+    : await api("/admin/creneaux", { method: "POST", body: JSON.stringify({ ...payload, mission_id: Number(field(fd, "mission_id")) }) });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Créneau modifié." : "Créneau ajouté." };
+}
+
+export async function adminDeleteCreneauAction(creneauId: number): Promise<ActionResult> {
+  const r = await api(`/admin/creneaux/${creneauId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+// Retirer un inscrit depuis la page d'un créneau. Si c'était le dernier créneau d'un planning
+// validé, le back refuse : on déverrouille puis on retire (le planning repasse en brouillon).
+export async function adminRemoveInscritAction(userId: number, reservationId: number, locked: boolean): Promise<ActionResult> {
+  let r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
+  if (!r.ok && locked && (r.status === 409 || r.status === 422)) {
+    const unlock = await api(`/admin/users/${userId}/planning/deverrouiller`, { method: "POST" });
+    if (unlock.ok) r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
+  }
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
 }

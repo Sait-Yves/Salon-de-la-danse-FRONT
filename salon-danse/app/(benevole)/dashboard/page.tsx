@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { fetchPlanning, getMe } from "../../services/loaders";
-import { SALON, formatJour } from "../../services/config";
+import { SALON } from "../../services/config";
 import StatusBadge from "../../_components/StatusBadge";
 
 const REGLES = [
   { t: "1 à 3 créneaux", d: "Vous pouvez vous engager sur 1 à 3 créneaux de 2 h maximum sur tout le week-end." },
   { t: "Pas de chevauchement", d: "Deux missions ne peuvent pas se tenir en même temps." },
   { t: "Une pause obligatoire", d: "Trois créneaux d'affilée sont interdits." },
-  { t: "Places limitées", d: "Chaque créneau a une jauge. Vert : places disponibles. Orange : presque complet. Gris : complet." },
+  { t: "Places limitées", d: "Chaque créneau affiche ses places restantes. Vert : places disponibles. Orange : presque complet. Gris : complet." },
   { t: "Validation définitive", d: "Tant que vous n'avez pas validé, votre planning reste modifiable. Ensuite, seul un administrateur peut le changer." },
 ];
 
@@ -27,13 +27,14 @@ export default async function DashboardPage() {
         <div className="flex flex-col items-start gap-2 md:items-end">
           <StatusBadge statut={user.statutPlanning} />
           {n != null && <span className="text-sm text-white/80">{n} / {SALON.quotaMax} créneau{n > 1 ? "x" : ""} choisi{n > 1 ? "s" : ""}</span>}
+          {!valide && <Link href="/planning" className="btn-pill btn-pill-inverse mt-1 text-sm">{n ? "Continuer mon planning" : "Composer mon planning"} →</Link>}
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="official-card p-5">
           <p className="field-label">Dates</p>
-          <p className="font-['Montserrat'] font-extrabold text-[#333]">{formatJour("2027-05-14").num}, {formatJour("2027-05-15").num} et {formatJour("2027-05-16").num} mai 2027</p>
+          <p className="font-['Montserrat'] font-extrabold text-[#333]">{SALON.dates}</p>
         </div>
         <div className="official-card p-5">
           <p className="field-label">Lieu</p>

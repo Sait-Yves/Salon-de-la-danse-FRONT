@@ -7,14 +7,16 @@ type MUser = {
   role: "admin" | "benevole"; isMineur: boolean; statut_planning: "brouillon" | "valide"; photo: boolean;
 };
 type MCreneau = { id: number; mission_id: number; jour: string; debut: string; fin: string; cap: number };
-type MMission = { id: number; nom: string; sensible: boolean };
+type MMission = { id: number; nom: string; sensible: boolean; edition_id?: number };
+type MEdition = { id: number; nom: string; debut: string; fin: string; active: boolean; archived?: boolean };
 type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillon" | "valide" };
 type State = {
   users: MUser[]; missions: MMission[]; creneaux: MCreneau[]; res: MRes[];
   codes: { id: number; code: string; isActive: boolean }[]; nextRes: number; nextUser: number; nextCode: number;
+  nextMission?: number; nextCreneau?: number; editions?: MEdition[]; nextEdition?: number;
 };
 
-const DAYS = ["2027-05-14", "2027-05-15", "2027-05-16"];
+const DAYS = ["2026-10-09", "2026-10-10", "2026-10-11"];
 const SLOTS: [string, string][] = [["08:30", "10:00"], ["10:00", "12:00"], ["12:00", "14:00"], ["14:00", "16:00"], ["16:00", "18:00"]];
 const MISSIONS = [
   "Accueil exposants", "Vestiaires", "Point Info", "Masterclass / Conférences", "Loges danseurs",
@@ -97,7 +99,7 @@ const cJson = (c: MCreneau, admin: boolean, withCount: boolean) => {
   return {
     id: c.id, jour: c.jour, heure_debut: `${c.debut}:00`, heure_fin: `${c.fin}:00`, capacite_max: c.cap,
     ...(withCount ? { places_restantes: Math.max(0, c.cap - s.res.filter((r) => r.creneau_id === c.id).length) } : {}),
-    mission: { id: m.id, edition_id: 1, nom: m.nom, ...(admin ? { isSensible: m.sensible } : {}) },
+    mission: { id: m.id, edition_id: m.edition_id ?? 1, nom: m.nom, ...(admin ? { isSensible: m.sensible } : {}) },
   };
 };
 const rJson = (r: MRes, admin: boolean) => {
@@ -149,7 +151,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
   const method = (init.method ?? "GET").toUpperCase();
   const body: any = typeof init.body === "string" ? JSON.parse(init.body) : init.body instanceof FormData ? Object.fromEntries(init.body.entries()) : {};
   const me = token?.startsWith("mock-") ? s.users.find((u) => u.id === Number(token.slice(5))) : undefined;
-  const pub = (method === "POST" && (p === "/login" || p === "/register"));
+  const pub = (method === "POST" && (p === "/login" || p === "/register" || p === "/forgot-password" || p === "/reset-password"));
   if (!pub && !me) throw new MockHttp(401, { message: "Unauthenticated." });
   const admin = p.startsWith("/admin");
   if (admin && me?.role !== "admin") throw new MockHttp(403, { message: "This action is unauthorized." });
@@ -175,6 +177,18 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     s.users.push(u);
     return json(201, { data: { user: uJson(u, false), token: `mock-${u.id}`, token_type: "Bearer" } });
   }
+  // Mot de passe oublié (démo : le code est toujours 123456)
+  if (method === "POST" && p === "/forgot-password") {
+    if (!/^\S+@\S+\.\S+$/.test(String(body.email ?? ""))) throw invalid("email", "L'adresse e-mail n'est pas valide.");
+    return json(200, { message: "Si un compte existe, un code a été envoyé." });
+  }
+  if (method === "POST" && p === "/reset-password") {
+    const u = s.users.find((x) => x.email === String(body.email ?? "").toLowerCase());
+    if (!u || body.token !== "123456") throw invalid("token", "Ce code est invalide ou a expiré.");
+    if (String(body.password ?? "").length < 8) throw invalid("password", "Le mot de passe doit contenir au moins 8 caractères.");
+    if (body.password !== body.password_confirmation) throw invalid("password", "La confirmation du mot de passe ne correspond pas.");
+    return json(200, { message: "Mot de passe réinitialisé." });
+  }
   if (method === "POST" && p === "/logout") return json(204, null);
   if (method === "GET" && p === "/me") return json(200, { data: uJson(me!, false) });
   if (method === "GET" && (p === "/me/photo" || (m = p.match(/^\/admin\/users\/(\d+)\/photo$/)))) {
@@ -188,6 +202,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     let list = s.creneaux.filter((c) => admin || !s.missions.find((x) => x.id === c.mission_id)!.sensible);
     if (q.get("jour")) list = list.filter((c) => c.jour === q.get("jour"));
     if (q.get("mission_id")) list = list.filter((c) => c.mission_id === Number(q.get("mission_id")));
+    if (q.get("edition_id")) list = list.filter((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === Number(q.get("edition_id")));
     const pg = paginate(list, Number(q.get("page") ?? 1), Number(q.get("per_page") ?? 50));
     return json(200, { ...pg, data: pg.data.map((c) => cJson(c, admin, true)) });
   }
@@ -215,6 +230,148 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
   }
 
   /* ---- admin ---- */
+  if (method === "GET" && (m = p.match(/^\/admin\/users\/(\d+)$/))) {
+    const u = s.users.find((x) => x.id === Number(m![1]));
+    if (!u) throw new MockHttp(404, { message: "Ressource introuvable." });
+    return json(200, { data: uJson(u, true) });
+  }
+  if (method === "GET" && p === "/admin/plannings") {
+    const list = s.users.filter((u) => !q.get("role") || u.role === q.get("role"));
+    return json(200, { data: list.map((u) => ({ ...uJson(u, true), reservations: s.res.filter((r) => r.user_id === u.id).map((r) => rJson(r, true)) })) });
+  }
+  if (method === "GET" && (m = p.match(/^\/admin\/creneaux\/(\d+)\/inscrits$/))) {
+    const c = s.creneaux.find((x) => x.id === Number(m![1]));
+    if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
+    const list = s.res.filter((r) => r.creneau_id === c.id);
+    return json(200, { data: {
+      creneau: cJson(c, true, true),
+      places_restantes: Math.max(0, c.cap - list.length),
+      inscrits: list.map((r) => ({ reservation_id: r.id, statut: r.statut, user: uJson(s.users.find((u) => u.id === r.user_id)!, true) })),
+    } });
+  }
+
+  /* ---- éditions, missions et créneaux (routes CRUD de Louis) ---- */
+  const bool = (v: any) => v === true || v === 1 || v === "1" || v === "true";
+  const hhmmOk = (v: any) => /^\d{2}:\d{2}(:\d{2})?$/.test(String(v ?? ""));
+  const dateOk = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ""));
+  s.editions ??= [{ id: 1, nom: "Démonstration 2026", debut: DAYS[0], fin: DAYS[DAYS.length - 1], active: true }];
+  const eds = s.editions;
+  const eJson = (e: MEdition) => ({ id: e.id, nom: e.nom, date_debut: e.debut, date_fin: e.fin, isActive: e.active, isArchived: !!e.archived });
+  const mJson = (x: MMission) => ({ id: x.id, edition_id: x.edition_id ?? 1, nom: x.nom, isSensible: x.sensible });
+
+  if (method === "GET" && p === "/admin/editions") return json(200, { data: eds.map(eJson) });
+  if (method === "POST" && p === "/admin/editions") {
+    const nom = String(body.nom ?? "").trim();
+    if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
+    if (!dateOk(body.date_debut)) throw invalid("date_debut", "La date de début est invalide.");
+    if (!dateOk(body.date_fin) || body.date_fin < body.date_debut) throw invalid("date_fin", "La date de fin doit être après la date de début.");
+    s.nextEdition ??= Math.max(0, ...eds.map((e) => e.id)) + 1;
+    const e: MEdition = { id: s.nextEdition++, nom, debut: body.date_debut, fin: body.date_fin, active: bool(body.isActive) };
+    if (e.active) eds.forEach((x) => (x.active = false));
+    eds.push(e);
+    return json(201, { data: eJson(e) });
+  }
+  if ((method === "GET" || method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/editions\/(\d+)$/))) {
+    const e = eds.find((x) => x.id === Number(m![1]));
+    if (!e) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (method === "GET") return json(200, { data: eJson(e) });
+    if (method === "DELETE") {
+      const n = s.missions.filter((x) => (x.edition_id ?? 1) === e.id).length;
+      if (n > 0) throw biz("Suppression impossible : des missions dépendent encore de cette édition.");
+      eds.splice(eds.indexOf(e), 1);
+      return json(204, null);
+    }
+    const next = { ...e };
+    if (body.nom !== undefined) next.nom = String(body.nom).trim();
+    if (body.date_debut !== undefined) next.debut = String(body.date_debut);
+    if (body.date_fin !== undefined) next.fin = String(body.date_fin);
+    if (!next.nom) throw invalid("nom", "Le champ nom est obligatoire.");
+    if (next.fin < next.debut) throw invalid("date_fin", "La date de fin doit être après la date de début.");
+    const hors = s.creneaux.some((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === e.id && (c.jour < next.debut || c.jour > next.fin));
+    if (hors) throw invalid("date_debut", "Des créneaux existants sortiraient des nouvelles dates.");
+    if (body.isArchived !== undefined) {
+      next.archived = bool(body.isArchived);
+      if (next.archived) next.active = false;
+    }
+    if (body.isActive !== undefined) {
+      if (bool(body.isActive) && next.archived) throw invalid("isActive", "Une édition archivée ne peut pas être active.");
+      next.active = bool(body.isActive);
+      if (next.active) eds.forEach((x) => (x.active = false));
+    }
+    Object.assign(e, next);
+    return json(200, { data: eJson(e) });
+  }
+
+  if (method === "GET" && p === "/admin/missions") {
+    const list = s.missions.filter((x) => !q.get("edition_id") || (x.edition_id ?? 1) === Number(q.get("edition_id")));
+    return json(200, { data: list.map(mJson) });
+  }
+  if (method === "POST" && p === "/admin/missions") {
+    const nom = String(body.nom ?? "").trim();
+    const edition = eds.find((e) => e.id === Number(body.edition_id));
+    if (!edition) throw invalid("edition_id", "L'édition sélectionnée est invalide.");
+    if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
+    s.nextMission ??= Math.max(0, ...s.missions.map((x) => x.id)) + 1;
+    const x: MMission = { id: s.nextMission++, nom, sensible: bool(body.isSensible), edition_id: edition.id };
+    s.missions.push(x);
+    return json(201, { data: mJson(x) });
+  }
+  if ((method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/missions\/(\d+)$/))) {
+    const x = s.missions.find((y) => y.id === Number(m![1]));
+    if (!x) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (method === "PATCH") {
+      if (body.nom !== undefined) {
+        const nom = String(body.nom).trim();
+        if (!nom) throw invalid("nom", "Le champ nom est obligatoire.");
+        x.nom = nom;
+      }
+      if (body.isSensible !== undefined) x.sensible = bool(body.isSensible);
+      return json(200, { data: mJson(x) });
+    }
+    if (s.creneaux.some((c) => c.mission_id === x.id)) throw biz("Suppression impossible : des créneaux dépendent encore de cette mission.");
+    s.missions.splice(s.missions.indexOf(x), 1);
+    return json(204, null);
+  }
+  function checkCreneau(c: { mission_id: number; jour: string; debut: string; fin: string; cap: number }) {
+    const e = eds.find((x) => x.id === (s.missions.find((y) => y.id === c.mission_id)?.edition_id ?? 1));
+    if (!e || c.jour < e.debut || c.jour > e.fin) throw invalid("jour", "Le jour doit être compris dans les dates de l'édition.");
+    if (!(c.fin > c.debut)) throw invalid("heure_fin", "L'heure de fin doit être après l'heure de début.");
+    if (!(c.cap >= 1)) throw invalid("capacite_max", "La capacité doit être d'au moins 1.");
+  }
+  if (method === "POST" && p === "/admin/creneaux") {
+    const mission = s.missions.find((x) => x.id === Number(body.mission_id));
+    if (!mission) throw invalid("mission_id", "Choisissez une mission.");
+    if (!hhmmOk(body.heure_debut)) throw invalid("heure_debut", "Heure de début invalide.");
+    if (!hhmmOk(body.heure_fin)) throw invalid("heure_fin", "Heure de fin invalide.");
+    const c: MCreneau = { id: 0, mission_id: mission.id, jour: String(body.jour ?? ""), debut: String(body.heure_debut).slice(0, 5), fin: String(body.heure_fin).slice(0, 5), cap: Number(body.capacite_max) };
+    checkCreneau(c);
+    s.nextCreneau ??= Math.max(0, ...s.creneaux.map((x) => x.id)) + 1;
+    c.id = s.nextCreneau++;
+    s.creneaux.push(c);
+    return json(201, { data: cJson(c, true, true) });
+  }
+  if ((method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/creneaux\/(\d+)$/))) {
+    const c = s.creneaux.find((x) => x.id === Number(m![1]));
+    if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
+    const n = s.res.filter((r) => r.creneau_id === c.id).length;
+    if (method === "DELETE") {
+      if (n > 0) throw biz("Suppression impossible : des réservations dépendent encore de ce créneau.");
+      s.creneaux.splice(s.creneaux.indexOf(c), 1);
+      return json(204, null);
+    }
+    const next = {
+      mission_id: c.mission_id,
+      jour: body.jour !== undefined ? String(body.jour) : c.jour,
+      debut: body.heure_debut !== undefined ? String(body.heure_debut).slice(0, 5) : c.debut,
+      fin: body.heure_fin !== undefined ? String(body.heure_fin).slice(0, 5) : c.fin,
+      cap: body.capacite_max !== undefined ? Number(body.capacite_max) : c.cap,
+    };
+    checkCreneau(next);
+    if (next.cap < n) throw invalid("capacite_max", `${n} bénévoles sont déjà inscrits : la capacité ne peut pas être inférieure.`);
+    Object.assign(c, next);
+    return json(200, { data: cJson(c, true, true) });
+  }
+
   if (method === "GET" && p === "/admin/users") {
     const pg = paginate(filterUsers(q), Number(q.get("page") ?? 1), Number(q.get("per_page") ?? 50));
     return json(200, { ...pg, data: pg.data.map((u) => uJson(u, true)) });

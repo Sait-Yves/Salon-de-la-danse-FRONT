@@ -8,7 +8,7 @@ function itemsFor(user: User | null): NavItem[] {
   if (user.role === "admin") {
     return [
       { href: "/admin", label: "Vue d'ensemble", exact: true },
-      { href: "/admin/creneaux", label: "Créneaux" },
+      { href: "/admin/creneaux", label: "Missions" },
       { href: "/admin/invitations", label: "Invitations" },
     ];
   }

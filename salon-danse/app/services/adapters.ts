@@ -4,6 +4,10 @@
 
 import type {
   Creneau,
+  CreneauInscrits,
+  Inscrit,
+  Mission,
+  PlanningRow,
   InvitationCode,
   Page,
   Reservation,
@@ -82,5 +86,58 @@ export function toPage<T>(json: Raw, map: (r: Raw) => T): Page<T> {
     total: Number(meta.total ?? items.length),
     page: Number(meta.current_page ?? 1),
     lastPage: Number(meta.last_page ?? 1),
+  };
+}
+
+// Mission (GET /admin/missions, proposé à Louis) : id, edition_id, nom, isSensible
+export function toMission(r: Raw): Mission {
+  return {
+    id: Number(r.id),
+    editionId: r.edition_id != null ? Number(r.edition_id) : null,
+    nom: str(r.nom) || "Mission",
+    sensible: !!r.isSensible,
+  };
+}
+
+// Premier tableau trouvé parmi plusieurs noms de clés possibles.
+function firstArray(o: Raw, keys: string[]): Raw[] {
+  for (const k of keys) if (Array.isArray(o?.[k])) return o[k];
+  return [];
+}
+
+// GET /admin/plannings : { data: [ utilisateur + reservations ] }.
+// On accepte l'utilisateur à plat ou dans "user", et "reservations" ou "planning".
+export function toPlanningRow(r: Raw): PlanningRow {
+  const u = r?.user ?? r;
+  const list = firstArray(r, ["reservations", "planning"]).length
+    ? firstArray(r, ["reservations", "planning"])
+    : firstArray(u, ["reservations", "planning"]);
+  const user = toUser(u);
+  return {
+    user,
+    reservations: list.map((x: Raw) => ({ ...toReservation(x), userId: user.id })),
+  };
+}
+
+// Un inscrit : réservation avec "user", ou utilisateur avec "reservation_id".
+function toInscrit(r: Raw): Inscrit {
+  const u = r?.user ?? r;
+  return {
+    reservationId: Number(r?.reservation_id ?? r?.reservation?.id ?? (r?.user ? r.id : NaN)),
+    statut: toStatut(r?.statut ?? r?.reservation?.statut ?? r?.statut_reservation),
+    user: toUser(u),
+  };
+}
+
+// GET /admin/creneaux/{id}/inscrits. Formats acceptés :
+// { data: { creneau, places_restantes, inscrits: [...] } } ou { data: [...], places_restantes }.
+export function toCreneauInscrits(json: Raw): CreneauInscrits {
+  const d = json?.data ?? json;
+  const list = Array.isArray(d) ? d : firstArray(d, ["inscrits", "reservations", "users", "data"]);
+  const rest = d?.places_restantes ?? json?.places_restantes ?? d?.creneau?.places_restantes;
+  return {
+    creneau: d?.creneau ? toCreneau(d.creneau) : null,
+    restantes: rest == null ? null : Number(rest),
+    inscrits: list.map(toInscrit).filter((i: Inscrit) => Number.isFinite(i.reservationId)),
   };
 }

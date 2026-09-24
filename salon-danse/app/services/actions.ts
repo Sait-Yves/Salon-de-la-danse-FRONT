@@ -170,3 +170,69 @@ export async function sendInvitationAction(_prev: FormState, fd: FormData): Prom
   if (!r.ok) return { error: r.status === 503 ? "L'envoi d'e-mails n'est pas configuré sur le serveur. Contactez l'équipe technique." : r.message };
   return { ok: true, message: `Invitation envoyée à ${email}.` };
 }
+
+/* ------------------------- Admin : missions et créneaux ------------------------ */
+// Routes proposées à Louis (voir docs/contrat-missions-creneaux.md).
+// Tant qu'elles n'existent pas, api() renvoie « pas encore disponible sur le serveur ».
+
+const HHMM = /^\d{2}:\d{2}$/;
+
+export async function adminSaveMissionAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const nom = field(fd, "nom");
+  if (!nom) return { fieldErrors: { nom: "Donnez un nom à la mission." } };
+  const body = JSON.stringify({ nom, isSensible: fd.get("isSensible") === "1" });
+  const r = id
+    ? await api(`/admin/missions/${id}`, { method: "PATCH", body })
+    : await api("/admin/missions", { method: "POST", body });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Mission modifiée." : `Mission « ${nom} » créée.` };
+}
+
+export async function adminDeleteMissionAction(missionId: number): Promise<ActionResult> {
+  const r = await api(`/admin/missions/${missionId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+export async function adminSaveCreneauAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const id = field(fd, "id");
+  const jour = field(fd, "jour");
+  const debut = field(fd, "heure_debut");
+  const fin = field(fd, "heure_fin");
+  const capacite = Number(field(fd, "capacite_max"));
+  const errors: Record<string, string> = {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(jour)) errors.jour = "Choisissez un jour.";
+  if (!HHMM.test(debut)) errors.heure_debut = "Heure invalide.";
+  if (!HHMM.test(fin)) errors.heure_fin = "Heure invalide.";
+  else if (HHMM.test(debut) && fin <= debut) errors.heure_fin = "Doit être après le début.";
+  if (!Number.isInteger(capacite) || capacite < 1) errors.capacite_max = "1 place minimum.";
+  if (Object.keys(errors).length) return { fieldErrors: errors };
+
+  const payload = { jour, heure_debut: debut, heure_fin: fin, capacite_max: capacite };
+  const r = id
+    ? await api(`/admin/creneaux/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
+    : await api("/admin/creneaux", { method: "POST", body: JSON.stringify({ ...payload, mission_id: Number(field(fd, "mission_id")) }) });
+  if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  refreshAdmin();
+  return { ok: true, message: id ? "Créneau modifié." : "Créneau ajouté." };
+}
+
+export async function adminDeleteCreneauAction(creneauId: number): Promise<ActionResult> {
+  const r = await api(`/admin/creneaux/${creneauId}`, { method: "DELETE" });
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}
+
+// Retirer un inscrit depuis la page d'un créneau. Si c'était le dernier créneau d'un planning
+// validé, le back refuse : on déverrouille puis on retire (le planning repasse en brouillon).
+export async function adminRemoveInscritAction(userId: number, reservationId: number, locked: boolean): Promise<ActionResult> {
+  let r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
+  if (!r.ok && locked && (r.status === 409 || r.status === 422)) {
+    const unlock = await api(`/admin/users/${userId}/planning/deverrouiller`, { method: "POST" });
+    if (unlock.ok) r = await api(`/admin/reservations/${reservationId}`, { method: "DELETE" });
+  }
+  refreshAdmin();
+  return { ok: r.ok, message: r.ok ? undefined : r.message };
+}

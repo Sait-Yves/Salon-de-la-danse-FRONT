@@ -12,9 +12,10 @@ type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillo
 type State = {
   users: MUser[]; missions: MMission[]; creneaux: MCreneau[]; res: MRes[];
   codes: { id: number; code: string; isActive: boolean }[]; nextRes: number; nextUser: number; nextCode: number;
+  nextMission?: number; nextCreneau?: number;
 };
 
-const DAYS = ["2027-05-14", "2027-05-15", "2027-05-16"];
+const DAYS = ["2026-10-09", "2026-10-10", "2026-10-11"];
 const SLOTS: [string, string][] = [["08:30", "10:00"], ["10:00", "12:00"], ["12:00", "14:00"], ["14:00", "16:00"], ["16:00", "18:00"]];
 const MISSIONS = [
   "Accueil exposants", "Vestiaires", "Point Info", "Masterclass / Conférences", "Loges danseurs",
@@ -215,6 +216,97 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
   }
 
   /* ---- admin ---- */
+  if (method === "GET" && (m = p.match(/^\/admin\/users\/(\d+)$/))) {
+    const u = s.users.find((x) => x.id === Number(m![1]));
+    if (!u) throw new MockHttp(404, { message: "Ressource introuvable." });
+    return json(200, { data: uJson(u, true) });
+  }
+  if (method === "GET" && p === "/admin/plannings") {
+    const list = s.users.filter((u) => !q.get("role") || u.role === q.get("role"));
+    return json(200, { data: list.map((u) => ({ ...uJson(u, true), reservations: s.res.filter((r) => r.user_id === u.id).map((r) => rJson(r, true)) })) });
+  }
+  if (method === "GET" && (m = p.match(/^\/admin\/creneaux\/(\d+)\/inscrits$/))) {
+    const c = s.creneaux.find((x) => x.id === Number(m![1]));
+    if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
+    const list = s.res.filter((r) => r.creneau_id === c.id);
+    return json(200, { data: {
+      creneau: cJson(c, true, true),
+      places_restantes: Math.max(0, c.cap - list.length),
+      inscrits: list.map((r) => ({ reservation_id: r.id, statut: r.statut, user: uJson(s.users.find((u) => u.id === r.user_id)!, true) })),
+    } });
+  }
+
+  /* ---- missions et créneaux : contrat proposé à Louis (pas encore dans le back) ---- */
+  const mJson = (x: MMission) => ({ id: x.id, edition_id: 1, nom: x.nom, isSensible: x.sensible });
+  const bool = (v: any) => v === true || v === 1 || v === "1" || v === "true";
+  const hhmmOk = (v: any) => /^\d{2}:\d{2}(:\d{2})?$/.test(String(v ?? ""));
+  if (method === "GET" && p === "/admin/missions") return json(200, { data: s.missions.map(mJson) });
+  if (method === "POST" && p === "/admin/missions") {
+    const nom = String(body.nom ?? "").trim();
+    if (!nom) throw invalid("nom", "Le nom de la mission est obligatoire.");
+    if (s.missions.some((x) => x.nom.toLowerCase() === nom.toLowerCase())) throw invalid("nom", "Une mission porte déjà ce nom.");
+    s.nextMission ??= Math.max(0, ...s.missions.map((x) => x.id)) + 1;
+    const x: MMission = { id: s.nextMission++, nom, sensible: bool(body.isSensible) };
+    s.missions.push(x);
+    return json(201, { data: mJson(x) });
+  }
+  if ((method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/missions\/(\d+)$/))) {
+    const x = s.missions.find((y) => y.id === Number(m![1]));
+    if (!x) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (method === "PATCH") {
+      if (body.nom !== undefined) {
+        const nom = String(body.nom).trim();
+        if (!nom) throw invalid("nom", "Le nom de la mission est obligatoire.");
+        x.nom = nom;
+      }
+      if (body.isSensible !== undefined) x.sensible = bool(body.isSensible);
+      return json(200, { data: mJson(x) });
+    }
+    const ids = s.creneaux.filter((c) => c.mission_id === x.id).map((c) => c.id);
+    const n = s.res.filter((r) => ids.includes(r.creneau_id)).length;
+    if (n > 0) throw biz(`Impossible de supprimer : ${n} bénévole${n > 1 ? "s sont inscrits" : " est inscrit"} sur cette mission.`);
+    s.creneaux = s.creneaux.filter((c) => c.mission_id !== x.id);
+    s.missions.splice(s.missions.indexOf(x), 1);
+    return json(204, null);
+  }
+  function checkCreneau(c: { jour: string; debut: string; fin: string; cap: number }) {
+    if (!DAYS.includes(c.jour)) throw invalid("jour", "Le jour doit être compris dans les dates de l'édition.");
+    if (!(c.fin > c.debut)) throw invalid("heure_fin", "L'heure de fin doit être après l'heure de début.");
+    if (!(c.cap >= 1)) throw invalid("capacite_max", "La capacité doit être d'au moins 1 place.");
+  }
+  if (method === "POST" && p === "/admin/creneaux") {
+    const mission = s.missions.find((x) => x.id === Number(body.mission_id));
+    if (!mission) throw invalid("mission_id", "Choisissez une mission.");
+    if (!hhmmOk(body.heure_debut)) throw invalid("heure_debut", "Heure de début invalide.");
+    if (!hhmmOk(body.heure_fin)) throw invalid("heure_fin", "Heure de fin invalide.");
+    const c: MCreneau = { id: 0, mission_id: mission.id, jour: String(body.jour ?? ""), debut: String(body.heure_debut).slice(0, 5), fin: String(body.heure_fin).slice(0, 5), cap: Number(body.capacite_max) };
+    checkCreneau(c);
+    s.nextCreneau ??= Math.max(0, ...s.creneaux.map((x) => x.id)) + 1;
+    c.id = s.nextCreneau++;
+    s.creneaux.push(c);
+    return json(201, { data: cJson(c, true, true) });
+  }
+  if ((method === "PATCH" || method === "DELETE") && (m = p.match(/^\/admin\/creneaux\/(\d+)$/))) {
+    const c = s.creneaux.find((x) => x.id === Number(m![1]));
+    if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
+    const n = s.res.filter((r) => r.creneau_id === c.id).length;
+    if (method === "DELETE") {
+      if (n > 0) throw biz(`Impossible de supprimer : ${n} bénévole${n > 1 ? "s sont inscrits" : " est inscrit"} sur ce créneau. Retirez-les d'abord.`);
+      s.creneaux.splice(s.creneaux.indexOf(c), 1);
+      return json(204, null);
+    }
+    const next = {
+      jour: body.jour !== undefined ? String(body.jour) : c.jour,
+      debut: body.heure_debut !== undefined ? String(body.heure_debut).slice(0, 5) : c.debut,
+      fin: body.heure_fin !== undefined ? String(body.heure_fin).slice(0, 5) : c.fin,
+      cap: body.capacite_max !== undefined ? Number(body.capacite_max) : c.cap,
+    };
+    checkCreneau(next);
+    if (next.cap < n) throw invalid("capacite_max", `${n} bénévoles sont déjà inscrits : la capacité ne peut pas être inférieure.`);
+    Object.assign(c, next);
+    return json(200, { data: cJson(c, true, true) });
+  }
+
   if (method === "GET" && p === "/admin/users") {
     const pg = paginate(filterUsers(q), Number(q.get("page") ?? 1), Number(q.get("per_page") ?? 50));
     return json(200, { ...pg, data: pg.data.map((u) => uJson(u, true)) });

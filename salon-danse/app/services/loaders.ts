@@ -1,8 +1,8 @@
 // Lectures de données côté serveur, utilisées par les pages.
 import { cache } from "react";
 import { api, getToken, type ApiResult } from "./api";
-import { toCreneau, toList, toPage, toReservation, toUser } from "./adapters";
-import type { Creneau, Page, Reservation, Result, User } from "./types";
+import { toCreneau, toCreneauInscrits, toList, toMission, toPage, toPlanningRow, toReservation, toUser } from "./adapters";
+import type { Creneau, CreneauInscrits, Mission, Page, PlanningRow, Reservation, Result, User } from "./types";
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = <T>(r: ApiResult): Result<T> => ({ ok: false, error: r.message, status: r.status });
@@ -72,8 +72,11 @@ export async function fetchUsers(f: UserFilters = {}): Promise<Result<Page<User>
   return ok(toPage(r.json, toUser));
 }
 
-// Il n'existe pas de GET /admin/users/{id} : on parcourt la liste.
+// Fiche d'un utilisateur : GET /admin/users/{id}. Si la route répond mal, on parcourt la liste.
 export async function findUser(id: number): Promise<Result<User | null>> {
+  const direct = await api(`/admin/users/${id}`);
+  if (direct.ok) return ok(toUser(direct.json?.data ?? direct.json));
+  if (direct.status === 404 && !/route/i.test(String(direct.json?.message ?? ""))) return ok(null);
   let page = 1;
   let last = 1;
   do {
@@ -85,6 +88,37 @@ export async function findUser(id: number): Promise<Result<User | null>> {
     page += 1;
   } while (page <= last && page <= 10);
   return ok(null);
+}
+
+// Tous les utilisateurs avec leurs réservations, en un seul appel (GET /admin/plannings).
+export async function fetchAllPlannings(role?: "benevole" | "admin"): Promise<Result<Map<number, Reservation[]>>> {
+  const r = await api(`/admin/plannings${role ? `?role=${role}` : ""}`);
+  if (!r.ok) return fail(r);
+  const rows: PlanningRow[] = toList(r.json, toPlanningRow);
+  return ok(new Map(rows.map((row) => [row.user.id, row.reservations])));
+}
+
+// Inscrits d'un créneau (GET /admin/creneaux/{id}/inscrits).
+export async function fetchInscrits(creneauId: number): Promise<Result<CreneauInscrits>> {
+  const r = await api(`/admin/creneaux/${creneauId}/inscrits`);
+  if (!r.ok) return fail(r);
+  return ok(toCreneauInscrits(r.json));
+}
+
+// Missions : GET /admin/missions si le back l'expose, sinon déduites des créneaux
+// (dans ce cas, une mission sans créneau n'apparaît pas).
+export async function fetchMissions(creneaux: Creneau[]): Promise<{ missions: Mission[]; fromApi: boolean }> {
+  const r = await api("/admin/missions");
+  if (r.ok && Array.isArray(r.json?.data)) {
+    return { missions: toList(r.json, toMission), fromApi: true };
+  }
+  const map = new Map<number, Mission>();
+  for (const c of creneaux) {
+    if (c.missionId != null && !map.has(c.missionId)) {
+      map.set(c.missionId, { id: c.missionId, editionId: null, nom: c.mission, sensible: c.sensible });
+    }
+  }
+  return { missions: [...map.values()], fromApi: false };
 }
 
 export interface Stats {

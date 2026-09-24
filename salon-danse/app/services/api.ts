@@ -46,6 +46,10 @@ function describe(status: number, json: any): { message: string; fieldErrors: Re
   if (status === 401) return { message: "Session expirée. Reconnectez-vous.", fieldErrors };
   if (status === 403) return { message: "Accès refusé.", fieldErrors };
   if (status === 429) return { message: "Trop de tentatives. Réessayez dans une minute.", fieldErrors };
+  // Route absente du back (405 = méthode non gérée, 404 « route could not be found »).
+  if (status === 405 || (status === 404 && /route/i.test(apiMessage))) {
+    return { message: "Cette action n'est pas encore disponible sur le serveur.", fieldErrors };
+  }
   if (status === 422) return { message: first || apiMessage || "Données invalides.", fieldErrors };
   if (status >= 500 && status !== 503) return { message: "Erreur du serveur. Réessayez dans un instant.", fieldErrors };
   return { message: apiMessage || "Requête refusée.", fieldErrors };

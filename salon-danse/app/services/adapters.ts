@@ -4,6 +4,7 @@
 
 import type {
   Creneau,
+  Demande,
   Edition,
   CreneauInscrits,
   Inscrit,
@@ -14,6 +15,7 @@ import type {
   Reservation,
   StatutPlanning,
   User,
+  ValidationAdmin,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,6 +26,10 @@ const hhmm = (v: Raw) => str(v).slice(0, 5); // "08:30:00" -> "08:30"
 
 export function toStatut(v: Raw): StatutPlanning {
   return v === "valide" ? "valide" : "brouillon";
+}
+
+export function toValidation(v: Raw): ValidationAdmin {
+  return v === "en_attente" || v === "acceptee" || v === "refusee" ? v : null;
 }
 
 // UserResource : id, nom, prenom, email, telephone, role, isMineur,
@@ -39,6 +45,7 @@ export function toUser(r: Raw): User {
     isMineur: !!r.isMineur,
     statutPlanning: toStatut(r.statut_planning),
     hasPhoto: !!r.photo_url,
+    demandesEnAttente: Number(r.demandes_en_attente ?? 0),
   };
 }
 
@@ -58,11 +65,12 @@ export function toCreneau(r: Raw): Creneau {
   };
 }
 
-// ReservationResource : id, statut, user_id (admin), creneau
+// ReservationResource : id, statut, validation_admin, user_id (admin), creneau
 export function toReservation(r: Raw): Reservation {
   return {
     id: Number(r.id),
     statut: toStatut(r.statut),
+    validation: toValidation(r.validation_admin),
     userId: r.user_id != null ? Number(r.user_id) : null,
     creneau: toCreneau(r.creneau ?? {}),
   };
@@ -126,6 +134,7 @@ function toInscrit(r: Raw): Inscrit {
   return {
     reservationId: Number(r?.reservation_id ?? r?.reservation?.id ?? (r?.user ? r.id : NaN)),
     statut: toStatut(r?.statut ?? r?.reservation?.statut ?? r?.statut_reservation),
+    validation: toValidation(r?.validation_admin ?? r?.reservation?.validation_admin),
     user: toUser(u),
   };
 }
@@ -153,4 +162,11 @@ export function toEdition(r: Raw): Edition {
     active: !!r.isActive,
     archived: !!r.isArchived,
   };
+}
+
+// GET /admin/validations : réservation + user + creneau
+export function toDemande(r: Raw): Demande {
+  const reservation = toReservation(r);
+  const user = toUser(r.user ?? { id: r.user_id });
+  return { reservation: { ...reservation, userId: user.id }, user, creeLe: str(r.created_at) };
 }

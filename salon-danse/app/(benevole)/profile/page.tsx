@@ -49,10 +49,12 @@ export default async function ProfilePage() {
                     <span className="block text-lg leading-none">{f.num}</span>
                     <span className="block text-[10px] font-semibold uppercase">{f.court}</span>
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-['Montserrat'] text-sm font-bold text-[#333]">{r.creneau.mission}</p>
                     <p className="text-sm">{r.creneau.debut} – {r.creneau.fin}</p>
                   </div>
+                  {r.validation === "en_attente" && <span className="shrink-0 rounded-full border border-[#A65A00]/40 bg-[#FFF4E5] px-2.5 py-0.5 text-[11px] font-bold text-[#A65A00]">En attente de validation</span>}
+                  {r.validation === "acceptee" && <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">Accepté</span>}
                 </li>
               );
             })}

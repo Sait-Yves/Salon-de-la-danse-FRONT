@@ -5,6 +5,8 @@ import { PlacesPill } from "../../../_components/Gauge";
 import StatusBadge from "../../../_components/StatusBadge";
 import ErrorCard from "../../../_components/ErrorCard";
 import RemoveInscrit from "./RemoveInscrit";
+import ValidationBadge from "../../../_components/ValidationBadge";
+import DecisionButtons from "../../validations/DecisionButtons";
 
 export default async function CreneauPage({ params }: { params: Promise<{ id: string }> }) {
   const id = Number((await params).id);
@@ -49,11 +51,12 @@ export default async function CreneauPage({ params }: { params: Promise<{ id: st
                     <td className="py-3 pr-2">
                       <Link href={`/admin/benevoles/${i.user.id}`} className="font-semibold text-[#7A291E] underline-offset-2 hover:underline">{i.user.prenom} {i.user.nom}</Link>
                       {i.user.isMineur && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Mineur</span>}
+                      {i.validation && <span className="ml-2"><ValidationBadge v={i.validation} /></span>}
                     </td>
                     <td className="hidden md:table-cell">{i.user.email}</td>
                     <td className="hidden sm:table-cell whitespace-nowrap">{i.user.telephone}</td>
                     <td><StatusBadge statut={i.user.statutPlanning === "valide" || i.statut === "valide" ? "valide" : "brouillon"} /></td>
-                    <td className="text-right"><RemoveInscrit userId={i.user.id} reservationId={i.reservationId} locked={i.user.statutPlanning === "valide" || i.statut === "valide"} /></td>
+                    <td className="text-right"><span className="inline-flex flex-wrap items-start justify-end gap-2">{i.validation === "en_attente" && <DecisionButtons reservationId={i.reservationId} />}<RemoveInscrit userId={i.user.id} reservationId={i.reservationId} locked={i.user.statutPlanning === "valide" || i.statut === "valide"} /></span></td>
                   </tr>
                 ))}
               </tbody>

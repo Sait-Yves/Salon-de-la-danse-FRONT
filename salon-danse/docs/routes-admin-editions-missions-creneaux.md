@@ -68,9 +68,18 @@ Le lien « Mot de passe oublié ? » est sur la page de connexion. Un lien `/mot
 - `GET /admin/plannings?role=benevole` : créneaux de chaque bénévole sur la vue d'ensemble, en un appel.
 - `PATCH /admin/users/{id}/role` : « Passer admin / Retirer les droits admin ».
 
+## Missions sensibles : validation par un admin
+
+Contrat complet côté back : `docs/validations-admin.md` dans le dépôt de Louis.
+
+- `GET /creneaux` renvoie aussi les créneaux sensibles (`mission.isSensible`). Le planning les affiche avec la mention « Sur validation d'un admin ».
+- `POST /reservations` sur une mission sensible → `validation_admin: "en_attente"`. Le front affiche « En attente » (planning, récap, barre du bas).
+- Une demande en attente peut être annulée même après validation du planning ; le planning repasse alors en brouillon.
+- `GET /admin/validations?statut=en_attente|acceptee` : page Admin › Validations (onglets En attente / Acceptées), bandeau sur la vue d'ensemble.
+- `PATCH /admin/reservations/{id}/validation` `{ decision: "acceptee" | "refusee" }` : boutons Accepter (1 clic) et Refuser (2 clics), sur la page Validations, la page d'un créneau et la fiche bénévole. Refus = réservation supprimée, planning du bénévole en brouillon.
+- `demandes_en_attente` (`/admin/users`) : pastille « N en attente » dans la liste des bénévoles.
+
 ## Reste à faire côté back
 
-- Parcours sensible : un bénévole réserve, la réservation passe « en attente », un admin valide ou refuse.
-  À trancher : la place est-elle bloquée pendant l'attente ? que peut faire le bénévole après un refus ?
 - Route publique de l'édition active, pour afficher ses dates aux bénévoles. Aujourd'hui elles sont écrites dans `config.ts`.
 - Code d'invitation lié à l'adresse invitée (pas de colonne `email` dans `invitation_codes`).

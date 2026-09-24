@@ -9,7 +9,7 @@ type MUser = {
 type MCreneau = { id: number; mission_id: number; jour: string; debut: string; fin: string; cap: number };
 type MMission = { id: number; nom: string; sensible: boolean; edition_id?: number };
 type MEdition = { id: number; nom: string; debut: string; fin: string; active: boolean; archived?: boolean };
-type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillon" | "valide" };
+type MRes = { id: number; user_id: number; creneau_id: number; statut: "brouillon" | "valide"; validation?: "en_attente" | "acceptee" | null; created?: string };
 type State = {
   users: MUser[]; missions: MMission[]; creneaux: MCreneau[]; res: MRes[];
   codes: { id: number; code: string; isActive: boolean }[]; nextRes: number; nextUser: number; nextCode: number;
@@ -82,6 +82,14 @@ function seed(): State {
       res.push({ id: state.nextRes++, user_id: u.id, creneau_id: c.id, statut: u.statut_planning });
     }
   }
+  // Quelques demandes sensibles en attente pour la démo.
+  for (const [uid, k] of [[4, 0], [7, 1], [10, 2]] as const) {
+    const c = creneaux.filter((x) => missions.find((m) => m.id === x.mission_id)!.sensible)[k * 3];
+    const u = users.find((x) => x.id === uid)!;
+    const mine = res.filter((r) => r.user_id === uid).map((r) => creneaux.find((x) => x.id === r.creneau_id)!);
+    try { schedule([...mine, c]); } catch { continue; }
+    res.push({ id: state.nextRes++, user_id: uid, creneau_id: c.id, statut: u.statut_planning, validation: "en_attente", created: `2026-09-2${k + 1}T1${k}:30:00.000000Z` });
+  }
   return state;
 }
 
@@ -91,6 +99,7 @@ const S = (): State => (g.__salonMock ??= seed());
 const uJson = (u: MUser, admin: boolean) => ({
   id: u.id, nom: u.nom, prenom: u.prenom, email: u.email, telephone: u.telephone, role: u.role,
   isMineur: u.isMineur, statut_planning: u.statut_planning,
+  demandes_en_attente: S().res.filter((r) => r.user_id === u.id && r.validation === "en_attente").length,
   photo_url: u.photo ? (admin ? `/api/admin/users/${u.id}/photo` : "/api/me/photo") : null,
 });
 const cJson = (c: MCreneau, admin: boolean, withCount: boolean) => {
@@ -99,12 +108,15 @@ const cJson = (c: MCreneau, admin: boolean, withCount: boolean) => {
   return {
     id: c.id, jour: c.jour, heure_debut: `${c.debut}:00`, heure_fin: `${c.fin}:00`, capacite_max: c.cap,
     ...(withCount ? { places_restantes: Math.max(0, c.cap - s.res.filter((r) => r.creneau_id === c.id).length) } : {}),
-    mission: { id: m.id, edition_id: m.edition_id ?? 1, nom: m.nom, ...(admin ? { isSensible: m.sensible } : {}) },
+    mission: { id: m.id, edition_id: m.edition_id ?? 1, nom: m.nom, isSensible: m.sensible },
   };
 };
 const rJson = (r: MRes, admin: boolean) => {
   const c = S().creneaux.find((x) => x.id === r.creneau_id)!;
-  return { id: r.id, statut: r.statut, ...(admin ? { user_id: r.user_id } : {}), creneau: cJson(c, admin, false) };
+  return {
+    id: r.id, statut: r.statut, validation_admin: r.validation ?? null, created_at: r.created ?? "2026-09-20T09:00:00.000000Z",
+    ...(admin ? { user_id: r.user_id } : {}), creneau: cJson(c, admin, false),
+  };
 };
 function paginate<T>(arr: T[], page: number, per: number) {
   const last = Math.max(1, Math.ceil(arr.length / per));
@@ -132,13 +144,15 @@ function addRes(user: MUser, creneauId: number, admin: boolean): MRes {
   const c = s.creneaux.find((x) => x.id === creneauId);
   if (!c) throw new MockHttp(404, { message: "Ressource introuvable." });
   const m = s.missions.find((x) => x.id === c.mission_id)!;
-  if (!admin && m.sensible) throw new MockHttp(404, { message: "Ressource introuvable." });
   if (!admin && user.statut_planning === "valide") throw biz("Planning validé : seul un administrateur peut le modifier.");
   const mine = s.res.filter((r) => r.user_id === user.id);
   if (mine.some((r) => r.creneau_id === c.id)) throw biz("Vous avez déjà réservé ce créneau.");
   schedule([...mine.map((r) => s.creneaux.find((x) => x.id === r.creneau_id)!), c]);
   if (s.res.filter((r) => r.creneau_id === c.id).length >= c.cap) throw biz("Ce créneau est complet.");
-  const r: MRes = { id: s.nextRes++, user_id: user.id, creneau_id: c.id, statut: user.statut_planning };
+  const r: MRes = {
+    id: s.nextRes++, user_id: user.id, creneau_id: c.id, statut: user.statut_planning,
+    validation: m.sensible ? (admin ? "acceptee" : "en_attente") : null, created: new Date().toISOString(),
+  };
   s.res.push(r);
   return r;
 }
@@ -199,7 +213,7 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     return new Response(svg, { status: 200, headers: { "Content-Type": "image/svg+xml" } });
   }
   if (method === "GET" && (p === "/creneaux" || p === "/admin/creneaux")) {
-    let list = s.creneaux.filter((c) => admin || !s.missions.find((x) => x.id === c.mission_id)!.sensible);
+    let list = s.creneaux.slice();
     if (q.get("jour")) list = list.filter((c) => c.jour === q.get("jour"));
     if (q.get("mission_id")) list = list.filter((c) => c.mission_id === Number(q.get("mission_id")));
     if (q.get("edition_id")) list = list.filter((c) => (s.missions.find((x) => x.id === c.mission_id)!.edition_id ?? 1) === Number(q.get("edition_id")));
@@ -207,15 +221,20 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     return json(200, { ...pg, data: pg.data.map((c) => cJson(c, admin, true)) });
   }
   if (method === "GET" && (p === "/planning" || p === "/reservations")) {
-    const mine = s.res.filter((r) => r.user_id === me!.id && !s.missions.find((x) => x.id === s.creneaux.find((c) => c.id === r.creneau_id)!.mission_id)!.sensible);
+    const mine = s.res.filter((r) => r.user_id === me!.id);
     return json(200, { data: mine.map((r) => rJson(r, false)) });
   }
   if (method === "POST" && p === "/reservations") return json(201, { data: rJson(addRes(me!, Number(body.creneau_id), false), false) });
   if (method === "DELETE" && (m = p.match(/^\/reservations\/(\d+)$/))) {
     const r = s.res.find((x) => x.id === Number(m![1]) && x.user_id === me!.id);
     if (!r) throw new MockHttp(404, { message: "Ressource introuvable." });
-    if (me!.statut_planning === "valide") throw biz("Planning validé : seul un administrateur peut le modifier.");
+    const pendingCancel = r.validation === "en_attente";
+    if (me!.statut_planning === "valide" && !pendingCancel) throw biz("Planning validé : seul un administrateur peut le modifier.");
     s.res.splice(s.res.indexOf(r), 1);
+    if (pendingCancel && me!.statut_planning === "valide") {
+      me!.statut_planning = "brouillon";
+      s.res.filter((x) => x.user_id === me!.id).forEach((x) => (x.statut = "brouillon"));
+    }
     return json(204, null);
   }
   if (method === "POST" && p === "/planning/valider") {
@@ -246,8 +265,33 @@ async function handle(path: string, init: RequestInit, token: string | null): Pr
     return json(200, { data: {
       creneau: cJson(c, true, true),
       places_restantes: Math.max(0, c.cap - list.length),
-      inscrits: list.map((r) => ({ reservation_id: r.id, statut: r.statut, user: uJson(s.users.find((u) => u.id === r.user_id)!, true) })),
+      inscrits: list.map((r) => ({ reservation_id: r.id, statut: r.statut, validation_admin: r.validation ?? null, user: uJson(s.users.find((u) => u.id === r.user_id)!, true) })),
     } });
+  }
+
+  /* ---- demandes sensibles ---- */
+  if (method === "GET" && p === "/admin/validations") {
+    const st = q.get("statut") ?? "en_attente";
+    const list = s.res.filter((r) => (r.validation ?? null) === st).sort((a, b) => String(a.created).localeCompare(String(b.created)));
+    const pg = paginate(list, Number(q.get("page") ?? 1), Number(q.get("per_page") ?? 25));
+    return json(200, { ...pg, data: pg.data.map((r) => ({
+      ...rJson(r, true),
+      user: uJson(s.users.find((u) => u.id === r.user_id)!, true),
+      creneau: cJson(s.creneaux.find((c) => c.id === r.creneau_id)!, true, true),
+    })) });
+  }
+  if (method === "PATCH" && (m = p.match(/^\/admin\/reservations\/(\d+)\/validation$/))) {
+    const r = s.res.find((x) => x.id === Number(m![1]));
+    if (!r) throw new MockHttp(404, { message: "Ressource introuvable." });
+    if (!r.validation) throw invalid("decision", "Cette réservation ne concerne pas une mission sensible.");
+    if (r.validation !== "en_attente") throw invalid("decision", "Cette demande a déjà été traitée.");
+    if (body.decision === "acceptee") { r.validation = "acceptee"; return json(200, { data: rJson(r, true) }); }
+    if (body.decision !== "refusee") throw invalid("decision", "La décision doit être acceptee ou refusee.");
+    s.res.splice(s.res.indexOf(r), 1);
+    const u = s.users.find((x) => x.id === r.user_id)!;
+    u.statut_planning = "brouillon";
+    s.res.filter((x) => x.user_id === u.id).forEach((x) => (x.statut = "brouillon"));
+    return json(200, { message: "Demande refusée. La place a été libérée et le planning est à nouveau modifiable." });
   }
 
   /* ---- éditions, missions et créneaux (routes CRUD de Louis) ---- */

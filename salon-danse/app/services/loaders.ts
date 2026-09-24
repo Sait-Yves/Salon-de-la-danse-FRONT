@@ -1,8 +1,8 @@
 // Lectures de données côté serveur, utilisées par les pages.
 import { cache } from "react";
 import { api, getToken, type ApiResult } from "./api";
-import { toCreneau, toCreneauInscrits, toEdition, toList, toMission, toPage, toPlanningRow, toReservation, toUser } from "./adapters";
-import type { Creneau, CreneauInscrits, Edition, Mission, Page, PlanningRow, Reservation, Result, User } from "./types";
+import { toCreneau, toCreneauInscrits, toDemande, toEdition, toList, toMission, toPage, toPlanningRow, toReservation, toUser } from "./adapters";
+import type { Creneau, CreneauInscrits, Demande, Edition, Mission, Page, PlanningRow, Reservation, Result, User } from "./types";
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 const fail = <T>(r: ApiResult): Result<T> => ({ ok: false, error: r.message, status: r.status });
@@ -33,7 +33,7 @@ export async function fetchAllCreneaux(admin = false, editionId?: number): Promi
   return ok(items);
 }
 
-// Réservations du bénévole connecté (missions sensibles exclues par le back).
+// Réservations du bénévole connecté (demandes sensibles incluses, avec validation_admin).
 export async function fetchPlanning(): Promise<Result<Reservation[]>> {
   const r = await api("/planning");
   if (!r.ok) return fail(r);
@@ -104,6 +104,24 @@ export async function fetchInscrits(creneauId: number): Promise<Result<CreneauIn
   const r = await api(`/admin/creneaux/${creneauId}/inscrits`);
   if (!r.ok) return fail(r);
   return ok(toCreneauInscrits(r.json));
+}
+
+// File des demandes sensibles (GET /admin/validations, paginée). Par défaut : en attente.
+export async function fetchDemandes(statut: "en_attente" | "acceptee" = "en_attente"): Promise<Result<Page<Demande>>> {
+  const items: Demande[] = [];
+  let page = 1;
+  let last = 1;
+  let total = 0;
+  do {
+    const r = await api(`/admin/validations?statut=${statut}&per_page=100&page=${page}`);
+    if (!r.ok) return fail(r);
+    const p = toPage(r.json, toDemande);
+    items.push(...p.items);
+    last = p.lastPage;
+    total = p.total;
+    page += 1;
+  } while (page <= last && page <= 10);
+  return ok({ items, total: Math.max(total, items.length), page: 1, lastPage: 1 });
 }
 
 // Id de l'édition active (null si aucune ou si la route échoue : pas de filtre).

@@ -9,6 +9,7 @@ function itemsFor(user: User | null): NavItem[] {
     return [
       { href: "/admin", label: "Vue d'ensemble", exact: true },
       { href: "/admin/creneaux", label: "Missions" },
+      { href: "/admin/validations", label: "Validations" },
       { href: "/admin/invitations", label: "Invitations" },
     ];
   }

@@ -7,7 +7,7 @@ import { loginAction } from "../services/actions";
 import { Alert, Field, SubmitButton } from "../_components/ui";
 import type { FormState } from "../services/types";
 
-export default function LoginForms({ initialMode, expired, reset }: { initialMode: "code" | "password"; expired: boolean; reset?: boolean }) {
+export default function LoginForms({ initialMode, expired, reset, next }: { initialMode: "code" | "password"; expired: boolean; reset?: boolean; next?: string }) {
   const [mode, setMode] = useState(initialMode);
   const router = useRouter();
   const [state, formAction] = useActionState<FormState, FormData>(loginAction, {});
@@ -49,6 +49,7 @@ export default function LoginForms({ initialMode, expired, reset }: { initialMod
         </form>
       ) : (
         <form action={formAction} className="space-y-4">
+          {next && <input type="hidden" name="next" value={next} />}
           <Field label="E-mail" name="email" type="email" required autoComplete="email" />
           <Field label="Mot de passe" name="password" type="password" required autoComplete="current-password" />
           {state.error && <Alert>{state.error}</Alert>}

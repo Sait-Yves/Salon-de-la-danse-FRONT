@@ -28,7 +28,7 @@ export default async function BenevolePage({ params }: { params: Promise<{ id: s
         <div>
           <h1 className="font-['Montserrat'] text-2xl font-black">{u.prenom} {u.nom}{u.role === "admin" && <span className="ml-3 rounded-full bg-white px-2 py-0.5 align-middle text-[11px] font-bold text-[#7A291E]">Admin</span>}</h1>
           <p className="text-sm text-white/75">{u.email} · {u.telephone}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-3"><StatusBadge statut={u.statutPlanning} /><span className="rounded-full bg-white px-1"><StatusToggle userId={u.id} statut={u.statutPlanning} /></span>{me?.id !== u.id && <span className="rounded-full bg-white px-1"><RoleToggle userId={u.id} role={u.role} /></span>}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-3"><StatusBadge statut={u.statutPlanning} /><span className="rounded-full bg-white px-1"><StatusToggle userId={u.id} statut={u.statutPlanning} /></span>{me?.id !== u.id && <span className="rounded-full bg-white px-1"><RoleToggle userId={u.id} role={u.role} /></span>}<Link href={`/admin/badges?user=${u.id}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#7A291E]">Badge</Link></div>
         </div>
       </div>
       <div className="grid gap-8 lg:grid-cols-2">

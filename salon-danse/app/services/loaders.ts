@@ -73,6 +73,21 @@ export async function fetchUsers(f: UserFilters = {}): Promise<Result<Page<User>
   return ok(toPage(r.json, toUser));
 }
 
+// Tous les utilisateurs correspondant aux filtres (parcourt les pages de 100).
+export async function fetchAllUsers(f: UserFilters = {}): Promise<Result<User[]>> {
+  const items: User[] = [];
+  let page = 1;
+  let last = 1;
+  do {
+    const r = await fetchUsers({ ...f, page, perPage: 100 });
+    if (!r.ok) return r;
+    items.push(...r.data.items);
+    last = r.data.lastPage;
+    page += 1;
+  } while (page <= last && page <= 20);
+  return ok(items);
+}
+
 // Fiche d'un utilisateur : GET /admin/users/{id}. Si la route répond mal, on parcourt la liste.
 export async function findUser(id: number): Promise<Result<User | null>> {
   const direct = await api(`/admin/users/${id}`);

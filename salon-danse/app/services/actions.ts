@@ -32,7 +32,11 @@ export async function loginAction(_prev: FormState, fd: FormData): Promise<FormS
   const token = r.json?.data?.token;
   if (!token) return { error: "Réponse inattendue du serveur." };
   await setSession(token);
-  redirect(r.json?.data?.user?.role === "admin" ? "/admin" : "/dashboard");
+  const isAdmin = r.json?.data?.user?.role === "admin";
+  // Retour à la page demandée avant la connexion (chemin interne seulement).
+  const next = field(fd, "next");
+  const safe = /^\/(?!\/)/.test(next) && (isAdmin || !next.startsWith("/admin"));
+  redirect(safe ? next : isAdmin ? "/admin" : "/dashboard");
 }
 
 export async function registerAction(_prev: FormState, fd: FormData): Promise<FormState> {

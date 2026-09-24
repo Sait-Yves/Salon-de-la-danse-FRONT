@@ -1,227 +1,152 @@
-"use client";
+import Link from "next/link";
+import { fetchStats, fetchUserPlanning, fetchUsers, type UserFilters } from "../services/loaders";
+import { formatJour } from "../services/config";
+import Gauge from "../_components/Gauge";
+import StatusBadge from "../_components/StatusBadge";
+import ErrorCard from "../_components/ErrorCard";
+import StatusToggle from "./StatusToggle";
 
-import { useState, useEffect } from "react";
-import { fetchUsers, updateUserPlanningStatus, generateInvitationCodes, exportCsv } from "../services/admin";
-import type { CurrentUser } from "../services/auth";
+type SP = { q?: string; statut?: string; mineur?: string; page?: string };
 
-export default function AdminDashboardPage() {
-  const [benevoles, setBenevoles] = useState<CurrentUser[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"Tous" | "Validé" | "En attente">("Tous");
-  
-  const [numCodes, setNumCodes] = useState(1);
-  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [adminMessage, setAdminMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+function qs(sp: SP, over: Partial<SP>) {
+  const p = new URLSearchParams();
+  const m = { ...sp, ...over };
+  for (const [k, v] of Object.entries(m)) if (v) p.set(k, String(v));
+  return p.toString();
+}
 
-  const loadUsers = async () => {
-    setIsLoading(true);
-    const users = await fetchUsers();
-    setBenevoles(users);
-    setIsLoading(false);
+export default async function AdminHome({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
+  const filters: UserFilters = {
+    role: "benevole",
+    q: sp.q || undefined,
+    statut: sp.statut === "valide" || sp.statut === "brouillon" ? sp.statut : undefined,
+    mineur: sp.mineur === "1" ? true : undefined,
+    page: Math.max(1, Number(sp.page) || 1),
   };
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const filteredBenevoles = benevoles.filter(
-    (b) =>
-      (b.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        b.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (b.mission && b.mission.toLowerCase().includes(searchTerm.toLowerCase()))) &&
-      (statusFilter === "Tous" || b.statut_planning === statusFilter.toLowerCase()),
-  );
-
-  const toggleStatut = async (id: number, currentStatus: string | undefined) => {
-    const action = currentStatus === "valide" ? "deverrouiller" : "valider";
-    const success = await updateUserPlanningStatus(id, action);
-    if (success) {
-      await loadUsers(); // Recharge la liste pour refléter le changement
-    } else {
-      alert("Erreur lors de la modification du statut.");
-    }
-  };
-
-  const handleExportCsv = async () => {
-    const csvContent = await exportCsv();
-    if (csvContent) {
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(
-        new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" }),
-      );
-      link.download = "benevoles-salon-danse.csv";
-      link.click();
-      URL.revokeObjectURL(link.href);
-    } else {
-      alert("Erreur lors de l'export CSV.");
-    }
-  };
-
-  const handleGenerateCodes = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setAdminMessage("Génération en cours...");
-    const response = await generateInvitationCodes(numCodes);
-    if (response && response.codes) {
-      setGeneratedCodes(response.codes);
-      setAdminMessage(`Génération réussie : ${response.codes.length} code(s).`);
-    } else {
-      setAdminMessage("Erreur lors de la génération des codes.");
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="font-['Montserrat'] text-xl font-bold text-[#7A291E] animate-pulse">Chargement de l'espace admin...</p>
-      </main>
-    );
+  const [stats, users] = await Promise.all([fetchStats(), fetchUsers(filters)]);
+  // Créneaux choisis par chaque bénévole de la page (un appel par bénévole, en parallèle).
+  const plannings = new Map<number, Awaited<ReturnType<typeof fetchUserPlanning>>>();
+  if (users.ok) {
+    const all = await Promise.all(users.data.items.map((u) => fetchUserPlanning(u.id)));
+    users.data.items.forEach((u, i) => plannings.set(u.id, all[i]));
   }
+  const taux = stats.ok && stats.data.capacite > 0 ? Math.round((stats.data.occupees / stats.data.capacite) * 100) : 0;
+  const exportQs = qs({ q: sp.q, statut: sp.statut, mineur: sp.mineur }, {});
 
   return (
-    <main className="min-h-[calc(100vh-5rem)] p-5 md:p-8 max-w-6xl mx-auto space-y-8 pb-20">
-      <div className="banner-gradient animate-rise flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
-        <div>
-          <h1 className="font-['Montserrat'] text-2xl md:text-3xl font-black tracking-tight">
-            Back-Office Administrateur
-          </h1>
-          <p className="text-sm text-white/70 mt-1">
-            Supervision globale et gestion des plannings (Salon de la Danse)
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExportCsv}
-            className="btn-pill btn-pill-inverse text-xs !py-2.5 !px-4"
-          >
-            Export CSV
-          </button>
-        </div>
+    <>
+      <div className="banner-gradient animate-rise">
+        <h1 className="font-['Montserrat'] text-2xl font-black">Vue d&apos;ensemble</h1>
+        <p className="text-sm text-white/75">Suivi des bénévoles et du remplissage des créneaux.</p>
       </div>
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="official-card p-6">
-          <h2 className="font-['Montserrat'] text-lg font-bold text-[#333333]">
-            Générer des codes d'invitation
-          </h2>
-          <p className="mt-1 text-sm text-[#666666]">
-            Ces codes permettent aux futurs bénévoles de s'inscrire.
-          </p>
-          <form onSubmit={handleGenerateCodes} className="mt-5 space-y-4">
-            <input
-              type="number"
-              min="1"
-              max="50"
-              required
-              value={numCodes}
-              onChange={(event) => setNumCodes(parseInt(event.target.value))}
-              placeholder="Nombre de codes"
-              className="field"
-            />
-            <button type="submit" className="btn-pill btn-pill-primary w-full">
-              Générer
-            </button>
-          </form>
-          {generatedCodes.length > 0 && (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-semibold text-amber-800">
-                Codes générés
-              </p>
-              <div className="mt-1 max-h-32 overflow-y-auto space-y-1">
-                {generatedCodes.map((c, i) => (
-                  <p key={i} className="font-mono text-sm font-bold text-amber-950">
-                    {c}
-                  </p>
-                ))}
-              </div>
+      {stats.ok ? (
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-5" aria-label="Chiffres clés">
+          {[
+            ["Comptes créés", stats.data.comptes],
+            ["Plannings validés", stats.data.valides],
+            ["En attente", stats.data.attente],
+            ["Mineurs", stats.data.mineurs],
+            ["Remplissage", `${taux} %`],
+          ].map(([l, v]) => (
+            <div key={String(l)} className="official-card p-4 text-center">
+              <p className="font-['Montserrat'] text-3xl font-black text-[#7A291E]">{v}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#3E150F]/70">{l}</p>
             </div>
-          )}
-        </div>
-      </section>
-
-      {adminMessage && (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {adminMessage}
-        </p>
+          ))}
+        </section>
+      ) : (
+        <ErrorCard title="Chiffres indisponibles" message={stats.error} status={stats.status} />
       )}
 
-      <div className="official-card animate-fade-up delay-2 p-6 space-y-6">
-        <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
-          <h2 className="font-['Montserrat'] text-lg font-bold text-[#333333]">
-            Liste des Bénévoles
-          </h2>
-          <input
-            type="text"
-            placeholder="Rechercher par nom, prénom..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="field md:w-80"
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as typeof statusFilter)
-            }
-            className="field md:w-36"
-          >
-            <option>Tous</option>
-            <option>Validé</option>
-            <option>En attente</option>
-          </select>
-        </div>
+      {stats.ok && stats.data.parMission.length > 0 && (
+        <section className="official-card p-6">
+          <h2 className="mb-4 font-['Montserrat'] text-lg font-extrabold">Remplissage par mission</h2>
+          <ul className="grid gap-4 md:grid-cols-2">
+            {stats.data.parMission.map((m) => (
+              <li key={m.mission}>
+                <div className="mb-1 flex justify-between text-sm">
+                  <span className="font-semibold">{m.mission}{m.sensible && <span className="ml-2 rounded-full bg-[#3E150F] px-2 py-0.5 text-[10px] text-white">Sensible</span>}</span>
+                  <span className="text-[#3E150F]/70">{m.occupees}/{m.capacite}</span>
+                </div>
+                <Gauge restantes={m.capacite - m.occupees} capacite={m.capacite} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-[#7A291E]/10 font-['Montserrat'] text-[11px] uppercase tracking-wider text-[#999]">
-                <th className="py-3 px-4">Bénévole</th>
-                <th className="py-3 px-4">E-mail</th>
-                <th className="py-3 px-4">Mission Assignée</th>
-                <th className="py-3 px-4">Statut Planning</th>
-                <th className="py-3 px-4 text-right">Actions Admin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#7A291E]/8 text-sm">
-              {filteredBenevoles.map((b) => (
-                <tr key={b.id} className="transition hover:bg-[#7A291E]/[0.03]">
-                  <td className="py-4 px-4 font-semibold text-[#333333]">
-                    {b.prenom} {b.nom}
-                  </td>
-                  <td className="py-4 px-4 text-[#666666]">{b.email}</td>
-                  <td className="py-4 px-4">
-                    <span
-                      className={`inline-block px-2.5 py-1 rounded-md text-xs font-medium ${b.isMineur ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-[#7A291E]/8 text-[#7A291E]"}`}
-                    >
-                      {b.mission || "Non assigné"}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-full font-semibold ${b.statut_planning === "valide" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}
-                    >
-                      {b.statut_planning === "valide" ? "Validé" : "En attente"}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <button
-                      onClick={() => toggleStatut(b.id, b.statut_planning)}
-                      className="btn-pill btn-pill-ghost text-xs !py-2 !px-3.5"
-                    >
-                      {b.statut_planning === "valide" ? "Déverrouiller" : "Valider"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredBenevoles.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-gray-500">Aucun bénévole trouvé.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <section className="official-card p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-['Montserrat'] text-lg font-extrabold">Bénévoles</h2>
+          <a href={`/api/export${exportQs ? `?${exportQs}` : ""}`} className="btn-pill btn-pill-ghost text-xs !px-4 !py-2.5">Exporter en CSV</a>
         </div>
-      </div>
-    </main>
+        <form method="get" className="mb-5 grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
+          <input name="q" defaultValue={sp.q ?? ""} placeholder="Nom, prénom ou e-mail" className="field" aria-label="Rechercher" />
+          <select name="statut" defaultValue={sp.statut ?? ""} className="field" aria-label="Statut du planning">
+            <option value="">Tous les statuts</option>
+            <option value="brouillon">Brouillon</option>
+            <option value="valide">Validé</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="mineur" value="1" defaultChecked={sp.mineur === "1"} /> Mineurs</label>
+          <button className="btn-pill btn-pill-primary text-sm">Filtrer</button>
+        </form>
+
+        {!users.ok ? (
+          <ErrorCard message={users.error} status={users.status} />
+        ) : users.data.items.length === 0 ? (
+          <p className="rounded-2xl bg-[#7A291E]/5 p-5 text-center text-sm">Aucun bénévole ne correspond.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase text-[#3E150F]/70">
+                  <tr><th className="py-2">Nom</th><th className="hidden md:table-cell">E-mail</th><th>Créneaux choisis</th><th>Statut</th><th className="text-right">Actions</th></tr>
+                </thead>
+                <tbody>
+                  {users.data.items.map((u) => (
+                    <tr key={u.id} className="border-t border-[#7A291E]/10">
+                      <td className="py-3 pr-2">
+                        <Link href={`/admin/benevoles/${u.id}`} className="font-semibold text-[#7A291E] underline-offset-2 hover:underline">{u.prenom} {u.nom}</Link>
+                        {u.isMineur && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Mineur</span>}
+                      </td>
+                      <td className="hidden md:table-cell">{u.email}</td>
+                      <td className="py-3 pr-3">
+                        {(() => {
+                          const pl = plannings.get(u.id);
+                          if (!pl || !pl.ok) return <span className="text-xs text-[#3E150F]/50">Indisponible</span>;
+                          if (pl.data.length === 0) return <span className="text-xs text-[#3E150F]/50">Aucun créneau</span>;
+                          const list = [...pl.data].sort((a, b) => a.creneau.jour.localeCompare(b.creneau.jour) || a.creneau.debut.localeCompare(b.creneau.debut));
+                          return (
+                            <div>
+                              <p className="mb-1 text-xs font-bold text-[#7A291E]">{list.length} / 3</p>
+                              <ul className="flex flex-wrap gap-1">
+                                {list.map((r) => (
+                                  <li key={r.id} className="rounded-full bg-[#7A291E]/8 px-2 py-0.5 text-[11px] text-[#3E150F]" title={`${formatJour(r.creneau.jour).long} ${r.creneau.debut}–${r.creneau.fin}`}>
+                                    {formatJour(r.creneau.jour).court} {r.creneau.debut} · {r.creneau.mission}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td><StatusBadge statut={u.statutPlanning} /></td>
+                      <td className="text-right"><StatusToggle userId={u.id} statut={u.statutPlanning} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <nav className="mt-5 flex items-center justify-between text-sm" aria-label="Pagination">
+              {users.data.page > 1 ? <Link className="btn-pill btn-pill-ghost text-xs !px-4 !py-2" href={`/admin?${qs(sp, { page: String(users.data.page - 1) })}`}>← Précédent</Link> : <span />}
+              <span>Page {users.data.page} / {users.data.lastPage} · {users.data.total} bénévoles</span>
+              {users.data.page < users.data.lastPage ? <Link className="btn-pill btn-pill-ghost text-xs !px-4 !py-2" href={`/admin?${qs(sp, { page: String(users.data.page + 1) })}`}>Suivant →</Link> : <span />}
+            </nav>
+          </>
+        )}
+      </section>
+    </>
   );
 }

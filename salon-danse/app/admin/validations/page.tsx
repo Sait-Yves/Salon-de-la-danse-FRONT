@@ -38,7 +38,7 @@ export default async function ValidationsPage({ searchParams }: { searchParams: 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase text-[#3E150F]/70">
-                <tr><th className="py-2">Bénévole</th><th>Créneau</th><th className="hidden md:table-cell">Places</th><th className="hidden md:table-cell">Demandé le</th><th className="hidden sm:table-cell">Planning</th>{vue === "en_attente" && <th className="text-right">Décision</th>}</tr>
+                <tr><th className="py-2">Bénévole</th><th>Créneau</th><th className="hidden md:table-cell">Places</th><th className="hidden md:table-cell">Demandé le</th><th className="hidden sm:table-cell">Planning du bénévole</th>{vue === "en_attente" && <th className="text-right">Décision</th>}</tr>
               </thead>
               <tbody>
                 {r.data.items.map((d) => {

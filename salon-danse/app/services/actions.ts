@@ -251,18 +251,67 @@ export async function adminDeleteEditionAction(editionId: number): Promise<Actio
 
 const HHMM = /^\d{2}:\d{2}$/;
 
+// Crée les créneaux d'une mission pour chaque jour × tranche horaire choisis.
+// Les combinaisons qui existent déjà pour cette mission sont ignorées.
+async function createCreneaux(missionId: number, jours: string[], plages: string[], capacite: number) {
+  const existing = new Set<string>();
+  const cur = await api(`/admin/creneaux?mission_id=${missionId}&per_page=100`);
+  if (cur.ok && Array.isArray(cur.json?.data)) {
+    for (const c of cur.json.data) existing.add(`${String(c.jour).slice(0, 10)}|${String(c.heure_debut).slice(0, 5)}-${String(c.heure_fin).slice(0, 5)}`);
+  }
+  let created = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  for (const jour of jours) {
+    for (const plage of plages) {
+      if (existing.has(`${jour}|${plage}`)) { skipped += 1; continue; }
+      const [debut, fin] = plage.split("-");
+      const r = await api("/admin/creneaux", {
+        method: "POST",
+        body: JSON.stringify({ mission_id: missionId, jour, heure_debut: debut, heure_fin: fin, capacite_max: capacite }),
+      });
+      if (r.ok) created += 1;
+      else if (!errors.includes(r.message)) errors.push(r.message);
+    }
+  }
+  return { created, skipped, errors };
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+
+function readSelection(fd: FormData) {
+  const jours = fd.getAll("jours").map(String).filter((j) => /^\d{4}-\d{2}-\d{2}$/.test(j));
+  const plages = fd.getAll("plages").map(String).filter((p) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(p));
+  const capacite = Number(field(fd, "capacite_max"));
+  return { jours, plages, capacite };
+}
+
 export async function adminSaveMissionAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const id = field(fd, "id");
   const nom = field(fd, "nom");
   if (!nom) return { fieldErrors: { nom: "Donnez un nom à la mission." } };
   const editionId = Number(field(fd, "edition_id")) || undefined;
+  const sel = readSelection(fd);
+  if (!id && sel.plages.length > 0) {
+    if (sel.jours.length === 0) return { fieldErrors: { jours: "Cochez au moins un jour." } };
+    if (!Number.isInteger(sel.capacite) || sel.capacite < 1) return { fieldErrors: { capacite_max: "1 place minimum." } };
+  }
   const body = JSON.stringify({ nom, isSensible: fd.get("isSensible") === "1", ...(id ? {} : { edition_id: editionId }) });
   const r = id
     ? await api(`/admin/missions/${id}`, { method: "PATCH", body })
     : await api("/admin/missions", { method: "POST", body });
   if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
+  if (id) { refreshAdmin(); return { ok: true, message: "Mission modifiée." }; }
+
+  const missionId = Number(r.json?.data?.id);
+  if (sel.plages.length > 0 && missionId) {
+    const res = await createCreneaux(missionId, sel.jours, sel.plages, sel.capacite);
+    refreshAdmin();
+    if (res.errors.length) return { ok: true, message: `Mission créée, ${plural(res.created, "créneau", "créneaux")} ajouté${res.created > 1 ? "s" : ""}. Erreur : ${res.errors[0]}` };
+    return { ok: true, message: `Mission « ${nom} » créée avec ${plural(res.created, "créneau", "créneaux")}.` };
+  }
   refreshAdmin();
-  return { ok: true, message: id ? "Mission modifiée." : `Mission « ${nom} » créée.` };
+  return { ok: true, message: `Mission « ${nom} » créée.` };
 }
 
 export async function adminDeleteMissionAction(missionId: number): Promise<ActionResult> {
@@ -271,27 +320,40 @@ export async function adminDeleteMissionAction(missionId: number): Promise<Actio
   return { ok: r.ok, message: r.ok ? undefined : r.message };
 }
 
+// Création : plusieurs jours × tranches d'un coup. Modification : un jour et une tranche.
 export async function adminSaveCreneauAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const id = field(fd, "id");
+  if (!id) {
+    const missionId = Number(field(fd, "mission_id"));
+    const sel = readSelection(fd);
+    const errors: Record<string, string> = {};
+    if (sel.jours.length === 0) errors.jours = "Cochez au moins un jour.";
+    if (sel.plages.length === 0) errors.plages = "Cochez au moins une tranche horaire.";
+    if (!Number.isInteger(sel.capacite) || sel.capacite < 1) errors.capacite_max = "1 place minimum.";
+    if (Object.keys(errors).length) return { fieldErrors: errors };
+    const res = await createCreneaux(missionId, sel.jours, sel.plages, sel.capacite);
+    refreshAdmin();
+    if (res.created === 0 && res.errors.length) return { error: res.errors[0] };
+    if (res.created === 0) return { error: "Ces créneaux existent déjà pour cette mission." };
+    const extra = res.skipped ? ` (${plural(res.skipped, "déjà existant ignoré", "déjà existants ignorés")})` : "";
+    return { ok: true, message: `${plural(res.created, "créneau ajouté", "créneaux ajoutés")}${extra}.` };
+  }
+
   const jour = field(fd, "jour");
-  const debut = field(fd, "heure_debut");
-  const fin = field(fd, "heure_fin");
+  const [debut, fin] = field(fd, "plage").split("-");
   const capacite = Number(field(fd, "capacite_max"));
   const errors: Record<string, string> = {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(jour)) errors.jour = "Choisissez un jour.";
-  if (!HHMM.test(debut)) errors.heure_debut = "Heure invalide.";
-  if (!HHMM.test(fin)) errors.heure_fin = "Heure invalide.";
-  else if (HHMM.test(debut) && fin <= debut) errors.heure_fin = "Doit être après le début.";
+  if (!HHMM.test(debut ?? "") || !HHMM.test(fin ?? "")) errors.plage = "Choisissez une tranche horaire.";
   if (!Number.isInteger(capacite) || capacite < 1) errors.capacite_max = "1 place minimum.";
   if (Object.keys(errors).length) return { fieldErrors: errors };
-
-  const payload = { jour, heure_debut: debut, heure_fin: fin, capacite_max: capacite };
-  const r = id
-    ? await api(`/admin/creneaux/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
-    : await api("/admin/creneaux", { method: "POST", body: JSON.stringify({ ...payload, mission_id: Number(field(fd, "mission_id")) }) });
+  const r = await api(`/admin/creneaux/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ jour, heure_debut: debut, heure_fin: fin, capacite_max: capacite }),
+  });
   if (!r.ok) return { error: r.message, fieldErrors: r.fieldErrors };
   refreshAdmin();
-  return { ok: true, message: id ? "Créneau modifié." : "Créneau ajouté." };
+  return { ok: true, message: "Créneau modifié." };
 }
 
 export async function adminDeleteCreneauAction(creneauId: number): Promise<ActionResult> {

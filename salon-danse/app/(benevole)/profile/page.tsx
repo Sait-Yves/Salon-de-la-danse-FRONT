@@ -4,19 +4,24 @@ import { formatJour } from "../../services/config";
 import StatusBadge from "../../_components/StatusBadge";
 import ErrorCard from "../../_components/ErrorCard";
 import AutoRefresh from "../../_components/AutoRefresh";
+import Badge from "../../_components/Badge";
+import PrintButton from "../../_components/PrintButton";
+import { badgeId, badgeQrSvg, siteUrl } from "../../services/badges";
 
 export default async function ProfilePage() {
   const user = (await getMe())!;
   const planning = await fetchPlanning();
+  const qr = await badgeQrSvg(await siteUrl(), user.id);
   const valide = user.statutPlanning === "valide";
   const list = planning.ok
     ? [...planning.data].sort((a, b) => a.creneau.jour.localeCompare(b.creneau.jour) || a.creneau.debut.localeCompare(b.creneau.debut))
     : [];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 p-5 pb-20 md:p-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-5 pb-20 md:p-8 print:space-y-0 print:p-0">
       <AutoRefresh seconds={30} />
-      <div className="banner-gradient animate-rise flex items-center gap-5">
+      <style>{`@page { size: A4 portrait; margin: 12mm; } @media print { body { background: #fff !important; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`}</style>
+      <div className="banner-gradient animate-rise flex items-center gap-5 print:hidden">
         {user.hasPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src="/api/photo" alt={`Photo de ${user.prenom} ${user.nom}`} width={84} height={84} className="h-[84px] w-[84px] rounded-2xl border-2 border-white/30 object-cover" />
@@ -30,7 +35,20 @@ export default async function ProfilePage() {
         </div>
       </div>
 
-      <section className="official-card p-6">
+      <section className="official-card p-6 print:border-0 print:p-0 print:shadow-none">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <div>
+            <h2 className="font-['Montserrat'] text-lg font-extrabold">Mon badge</h2>
+            <p className="text-sm">À présenter à l&apos;accueil. Le QR code affiche vos missions et horaires à jour.</p>
+          </div>
+          <PrintButton className="btn-pill btn-pill-ghost shrink-0 text-xs !px-4 !py-2.5" />
+        </div>
+        <div className="overflow-x-auto print:overflow-visible">
+          <Badge user={user} qrSvg={qr} photoSrc="/api/photo" id={badgeId(user.id)} />
+        </div>
+      </section>
+
+      <section className="official-card p-6 print:hidden">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-['Montserrat'] text-lg font-extrabold">Mon récapitulatif</h2>
           <a href="/api/planning-pdf" className="btn-pill btn-pill-ghost text-xs !px-4 !py-2.5">Télécharger en PDF</a>
@@ -67,7 +85,7 @@ export default async function ProfilePage() {
         )}
       </section>
 
-      <p className="text-center text-xs">Vos informations personnelles ne sont modifiables que par un administrateur. Pour toute demande, contactez l&apos;équipe du Salon.</p>
+      <p className="text-center text-xs print:hidden">Vos informations personnelles ne sont modifiables que par un administrateur. Pour toute demande, contactez l&apos;équipe du Salon.</p>
     </div>
   );
 }
